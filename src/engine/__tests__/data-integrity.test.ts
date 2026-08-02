@@ -1,26 +1,57 @@
 /**
  * Integrity of the parameter library itself.
  *
- * The engine now throws when a parameter it needs is missing, null or
- * ambiguous, which makes the library's completeness testable rather than
- * something a user discovers. These assertions are the enforceable half of
- * that: they check the library's internal consistency, and they check that
- * every fuel can actually be converted to energy.
+ * The engine throws when a parameter it needs is missing, null or ambiguous,
+ * which makes the library's completeness testable rather than something a user
+ * discovers. This file is where that gets enforced: the calculator's offered
+ * combinations must have a complete factor set, and everything else must be
+ * wholly absent rather than half-built.
  *
- * What is deliberately NOT asserted here is that every (fuel, category, gas)
- * combination has a factor. The 2006 Guidelines do not publish one for every
- * combination — there is no residential petrol factor and no road-transport
- * charcoal factor, and inventing either would break CLAUDE.md rule 7. Turning
- * that into an assertion needs a product decision about which combinations the
- * calculator offers; until then, the pinned list in `biomass-memo.test.ts`
- * records which pairs compute today, so losing one fails the suite.
+ * The 2006 Guidelines do not publish a factor for every combination, and never
+ * will — there is no residential petrol factor and no road-transport charcoal
+ * factor. That is why the assertion below is "complete or empty", not
+ * "complete everywhere". Filling a hole to satisfy a test would break
+ * CLAUDE.md rule 7.
  */
 import { describe, expect, it } from 'vitest';
 import { parameters } from '../../data';
-import { findNetCalorificValue } from '../lookup';
+import type { CategoryCode } from '../../data/types';
+import { calculateFuelCombustion } from '../combustion';
+import { findEmissionFactors, findNetCalorificValue, GASES } from '../lookup';
 import { EXPECTED_EMISSION_FACTOR_UNIT, EXPECTED_NCV_UNIT } from '../units';
 
 const PROVENANCE_CLASSES = ['ipcc', 'external', 'assumed'];
+
+/**
+ * The fuel/category combinations the MVP calculator offers.
+ *
+ * A combination qualifies when the library publishes a complete, unambiguous
+ * factor set for it: CO2, CH4 and N2O, one factor each. This list is the
+ * product decision; the tests below hold the library to it.
+ */
+const MVP_COMBINATIONS: ReadonlyArray<readonly [string, CategoryCode]> = [
+  ['liquefied_petroleum_gases', '1A4b'],
+  ['liquefied_petroleum_gases', '1A3b'],
+  ['charcoal', '1A4b'],
+  ['wood_wood_waste', '1A4b'],
+  ['other_kerosene', '1A4b'],
+  ['gas_diesel_oil', '1A3b'],
+  ['natural_gas', '1A4b'],
+];
+
+const isMvp = (fuelId: string, category: CategoryCode): boolean =>
+  MVP_COMBINATIONS.some(([fuel, code]) => fuel === fuelId && code === category);
+
+/** Every fuel/category pair in the library, offered or not. */
+function everyCombination(): Array<readonly [string, CategoryCode]> {
+  const pairs: Array<readonly [string, CategoryCode]> = [];
+  for (const fuel of parameters.fuels) {
+    for (const category of Object.keys(parameters.categories)) {
+      pairs.push([fuel.id, category]);
+    }
+  }
+  return pairs;
+}
 
 describe('every fuel can be converted to energy', () => {
   it.each(parameters.fuels.map((fuel) => fuel.id))('%s has a net calorific value', (fuelId) => {
@@ -40,6 +71,120 @@ describe('every fuel can be converted to energy', () => {
     const fuelIds = new Set(parameters.fuels.map((fuel) => fuel.id));
     for (const ncv of parameters.net_calorific_values) {
       expect(fuelIds.has(ncv.fuel)).toBe(true);
+    }
+  });
+});
+
+describe('every offered combination has a complete factor set', () => {
+  it.each(MVP_COMBINATIONS)('%s / %s publishes CO2, CH4 and N2O', (fuelId, category) => {
+    // The calculator offers this combination, so all three gases must be
+    // available. If this fails, either the library lost a factor or the
+    // combination should not be on the MVP list — do not invent the factor.
+    for (const gas of GASES) {
+      const matches = findEmissionFactors(parameters, fuelId, category, gas);
+      expect(
+        matches.length,
+        `${fuelId} / ${category}: no ${gas} emission factor in the parameter library`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(MVP_COMBINATIONS)('%s / %s publishes non-null values', (fuelId, category) => {
+    for (const gas of GASES) {
+      for (const factor of findEmissionFactors(parameters, fuelId, category, gas)) {
+        expect(
+          Number.isFinite(factor.value),
+          `${factor.id}: value is ${JSON.stringify(factor.value)}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it.each(MVP_COMBINATIONS)('%s / %s resolves to exactly one factor per gas', (fuelId, category) => {
+    // An offered combination must be unambiguous as well as complete: the
+    // engine throws on more than one match, so a second factor would take the
+    // combination out of service without removing it from the MVP list.
+    for (const gas of GASES) {
+      expect(findEmissionFactors(parameters, fuelId, category, gas)).toHaveLength(1);
+    }
+  });
+
+  it.each(MVP_COMBINATIONS)('%s / %s calculates without throwing', (fuelId, category) => {
+    // The end-to-end consequence of the three assertions above.
+    expect(() => calculateFuelCombustion(fuelId, 1, category)).not.toThrow();
+  });
+
+  it('offers every combination that is complete and unambiguous', () => {
+    // The other direction: a combination the library fully supports should not
+    // be missing from the MVP list by oversight.
+    //
+    // motor_gasoline / 1A3b is the one deliberate exclusion. Its factor set is
+    // complete, but Table 3.2.2 disaggregates CH4 and N2O by vehicle
+    // technology, so it needs a Tier 3 choice from the user before it can be
+    // calculated. It is excluded here, not missing.
+    const unambiguouslyComplete = everyCombination().filter(([fuelId, category]) =>
+      GASES.every((gas) => findEmissionFactors(parameters, fuelId, category, gas).length === 1),
+    );
+
+    expect(unambiguouslyComplete.filter(([f, c]) => !isMvp(f, c))).toEqual([]);
+    expect(unambiguouslyComplete).toHaveLength(MVP_COMBINATIONS.length);
+  });
+});
+
+describe('combinations outside the MVP are complete or empty, never partial', () => {
+  // A partial factor set is the dangerous state: it looks like support, and
+  // under the old gap-returning engine it would have produced a result missing
+  // a gas. A wholly absent set is fine — it means the Guidelines publish
+  // nothing for that combination, or that work has not started.
+  //
+  // A missing density is also fine. It blocks volume-based input for a fuel,
+  // which is a separate, already-visible gap; it says nothing about whether the
+  // emission factors for that fuel are coherent.
+  const nonMvp = everyCombination().filter(([fuelId, category]) => !isMvp(fuelId, category));
+
+  it('has combinations to check', () => {
+    expect(nonMvp.length).toBeGreaterThan(0);
+  });
+
+  it.each(nonMvp)('%s / %s has all three gases or none', (fuelId, category) => {
+    const present = GASES.filter(
+      (gas) => findEmissionFactors(parameters, fuelId, category, gas).length > 0,
+    );
+
+    expect(
+      present.length === 0 || present.length === GASES.length,
+      `${fuelId} / ${category} has a partial factor set: ${present.join(', ') || 'none'} ` +
+        `present, ${GASES.filter((gas) => !present.includes(gas)).join(', ')} missing. ` +
+        `Publish the missing gases or remove the partial set — do not ship half a fuel.`,
+    ).toBe(true);
+  });
+
+  it.each(nonMvp)('%s / %s publishes non-null values for whatever it does have', (fuelId, category) => {
+    for (const gas of GASES) {
+      for (const factor of findEmissionFactors(parameters, fuelId, category, gas)) {
+        expect(
+          Number.isFinite(factor.value),
+          `${factor.id}: value is ${JSON.stringify(factor.value)}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('does not treat a missing density as a factor problem', () => {
+    // Every density in the library is currently unsourced, yet the fuels they
+    // block still have coherent factor sets. The two gaps are independent.
+    const blockedFuels = parameters.fuels
+      .filter((fuel) => fuel.blocked_by !== undefined)
+      .map((fuel) => fuel.id);
+    expect(blockedFuels.length).toBeGreaterThan(0);
+
+    for (const fuelId of blockedFuels) {
+      for (const category of Object.keys(parameters.categories)) {
+        const present = GASES.filter(
+          (gas) => findEmissionFactors(parameters, fuelId, category, gas).length > 0,
+        );
+        expect(present.length === 0 || present.length === GASES.length).toBe(true);
+      }
     }
   });
 });

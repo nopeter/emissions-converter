@@ -100,18 +100,16 @@ describe('biomass CO2 never reaches the total-contributing figure', () => {
 describe('the memo/total split is consistent everywhere', () => {
   const results = everyComputablePair();
 
-  it('covers exactly the fuel/category pairs the library supports today', () => {
-    // Pinned so the sweep below cannot shrink unnoticed. Adding a factor set to
-    // the library should add a line here; losing one should fail this test.
-    expect(results.map((result) => `${result.fuelId}/${result.categoryCode}`)).toEqual([
-      'liquefied_petroleum_gases/1A4b',
-      'liquefied_petroleum_gases/1A3b',
-      'charcoal/1A4b',
-      'wood_wood_waste/1A4b',
-      'other_kerosene/1A4b',
-      'gas_diesel_oil/1A3b',
-      'natural_gas/1A4b',
-    ]);
+  it('covers every combination the calculator offers', () => {
+    // Guards against the sweep silently shrinking to nothing. Which
+    // combinations those are is asserted in `data-integrity.test.ts`, which
+    // holds the MVP list; here we only need the sweep to be non-trivial and to
+    // include both biomass fuels.
+    expect(results.length).toBeGreaterThan(1);
+    const swept = results.map((result) => result.fuelId);
+    for (const fuel of biomassFuels) {
+      expect(swept).toContain(fuel.id);
+    }
   });
 
   it('never places a memo-flagged gas in totalContributing', () => {
