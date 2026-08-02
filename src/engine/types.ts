@@ -103,17 +103,21 @@ export interface GasEmission {
   audit: GasAudit;
 }
 
-/** Why the engine could not produce a figure it would otherwise have produced. */
-export type GapKind =
-  | 'missing_emission_factor'
-  | 'ambiguous_emission_factor'
-  | 'unverified_parameter';
+/**
+ * Why a returned figure carries a caveat.
+ *
+ * A missing, null or ambiguous factor is no longer a gap: it throws an
+ * `EngineError`, because a result computed around a hole would read as a
+ * complete answer. What remains here is the case where a figure was produced
+ * but something about the parameters behind it should be shown alongside it.
+ */
+export type GapKind = 'unverified_parameter';
 
 /**
- * A clearly-labelled hole in the parameter library.
+ * A clearly-labelled caveat on a result the engine did produce.
  *
- * Gaps are returned, never filled. The UI shows them; the engine does not
- * substitute a similar fuel or a remembered value (CLAUDE.md rule 7).
+ * Caveats are returned, never suppressed. The UI shows them next to the number
+ * they qualify (CLAUDE.md rule 7).
  */
 export interface ParameterGap {
   kind: GapKind;
@@ -166,6 +170,10 @@ export interface CombustionResult {
   totalContributing: GasEmission[];
   /** Gases reported separately and excluded from the headline total. */
   memoItems: GasEmission[];
+  /**
+   * Caveats on the figures above. Never a substitute for a missing factor: if a
+   * factor were missing, this result would not exist.
+   */
   gaps: ParameterGap[];
   audit: CombustionAudit;
 }
@@ -175,7 +183,7 @@ export interface CombustionOptions {
   /**
    * Selects among Tier 3 technology-disaggregated factors (Vol 2 Ch 3 Table
    * 3.2.2). When several factors match a gas and this is unset, the engine
-   * reports an ambiguity gap rather than choosing one.
+   * throws rather than choosing one.
    */
   vehicleTechnology?: string;
   /**

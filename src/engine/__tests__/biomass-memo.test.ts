@@ -22,8 +22,10 @@ const biomassFuels = parameters.fuels.filter((fuel) => fuel.biomass);
 /**
  * Every fuel/category pair the engine can actually compute, at 1 kg.
  *
- * A pair with no calorific value throws rather than returning a result; that is
- * a different rule (never invent a factor) and is covered elsewhere.
+ * A pair with a missing or ambiguous factor throws rather than returning a
+ * partial result, so it is skipped here. Which pairs those are is pinned below,
+ * so that a pair quietly disappearing from the library shows up as a failure
+ * rather than as a smaller sweep.
  */
 function everyComputablePair(): CombustionResult[] {
   const results: CombustionResult[] = [];
@@ -98,8 +100,18 @@ describe('biomass CO2 never reaches the total-contributing figure', () => {
 describe('the memo/total split is consistent everywhere', () => {
   const results = everyComputablePair();
 
-  it('covers more than one fuel and category', () => {
-    expect(results.length).toBeGreaterThan(1);
+  it('covers exactly the fuel/category pairs the library supports today', () => {
+    // Pinned so the sweep below cannot shrink unnoticed. Adding a factor set to
+    // the library should add a line here; losing one should fail this test.
+    expect(results.map((result) => `${result.fuelId}/${result.categoryCode}`)).toEqual([
+      'liquefied_petroleum_gases/1A4b',
+      'liquefied_petroleum_gases/1A3b',
+      'charcoal/1A4b',
+      'wood_wood_waste/1A4b',
+      'other_kerosene/1A4b',
+      'gas_diesel_oil/1A3b',
+      'natural_gas/1A4b',
+    ]);
   });
 
   it('never places a memo-flagged gas in totalContributing', () => {

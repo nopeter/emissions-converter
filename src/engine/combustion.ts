@@ -12,6 +12,14 @@
  * This module is pure: no React, no DOM, no I/O, no clock, no randomness. Every
  * numeric emission and calorific value it uses comes from the parameter library;
  * none is written here.
+ *
+ * It is also all-or-nothing. If any parameter the calculation needs is missing,
+ * null or ambiguous, it throws an `EngineError` naming the parameter and the
+ * inputs that asked for it, rather than returning a result with a hole in it.
+ * That makes the library's own completeness testable: a data-integrity test can
+ * assert that every fuel has a calorific value and every Tier 1 (fuel, category,
+ * gas) combination has a factor, and a regression in `parameters.json` becomes a
+ * failing test instead of a quietly missing gas.
  */
 import { parameters } from '../data';
 import type {
@@ -56,6 +64,10 @@ const EQUATION_ENERGY =
  * derived view that this engine does not yet produce (CLAUDE.md rule 4).
  * Biomass CO2 is returned in `memoItems` and is absent from `totalContributing`
  * (rule 3).
+ *
+ * @throws {EngineError} if the mass is invalid, the fuel or category is unknown,
+ * the fuel has no net calorific value, or any of the three gases has no factor,
+ * a null factor, or more than one matching factor.
  */
 export function calculateFuelCombustion(
   fuelId: string,
@@ -80,7 +92,8 @@ export function calculateFuelCombustion(
   if (categoryLabel === undefined) {
     throw new EngineError(
       'unknown_category',
-      `No category with code "${categoryCode}" in the parameter library.`,
+      `No category with code "${categoryCode}" exists in the parameter library. Known ` +
+        `categories: ${Object.keys(library.categories).join(', ')}.`,
     );
   }
 
@@ -88,7 +101,17 @@ export function calculateFuelCombustion(
   if (!ncv) {
     throw new EngineError(
       'missing_calorific_value',
-      `No net calorific value published for "${fuelId}". The engine will not estimate one.`,
+      `No net calorific value is published for fuel "${fuelId}" (${fuel.label}), so its mass ` +
+        `cannot be converted to energy and Vol 2 Ch 2 Eq 2.1 cannot be applied. The engine ` +
+        `will not estimate one.`,
+    );
+  }
+
+  if (!Number.isFinite(ncv.value)) {
+    throw new EngineError(
+      'null_parameter_value',
+      `Net calorific value "${ncv.id}" for fuel "${fuelId}" (${fuel.label}) has no published ` +
+        `value (found ${JSON.stringify(ncv.value)}). The engine will not estimate one.`,
     );
   }
 
@@ -118,29 +141,34 @@ export function calculateFuelCombustion(
     );
 
     if (matches.length === 0) {
-      gaps.push({
-        kind: 'missing_emission_factor',
-        gas,
-        message: missingFactorMessage(fuel.label, gas, categoryCode, options.vehicleTechnology),
-      });
-      continue;
+      throw new EngineError(
+        'missing_emission_factor',
+        missingFactorMessage(fuelId, fuel.label, gas, categoryCode, options.vehicleTechnology),
+      );
     }
 
     if (matches.length > 1) {
-      gaps.push({
-        kind: 'ambiguous_emission_factor',
-        gas,
-        message:
-          `${matches.length} technology-specific ${gas} factors are published for ` +
-          `${fuel.label} in category ${categoryCode} (${matches
-            .map((factor) => factor.vehicle_technology ?? 'unspecified')
-            .join(', ')}). Choosing one is a Tier 3 decision, so no ${gas} figure was ` +
-          `produced until a technology is selected.`,
-      });
-      continue;
+      throw new EngineError(
+        'ambiguous_emission_factor',
+        `${matches.length} ${gas} emission factors match fuel "${fuelId}" (${fuel.label}) in ` +
+          `category "${categoryCode}": ${matches
+            .map((factor) => `${factor.id} (${factor.vehicle_technology ?? 'unspecified'})`)
+            .join(', ')}. Choosing between them is a Tier 3 decision about technology, not ` +
+          `something the engine may decide. Pass options.vehicleTechnology to select one.`,
+      );
     }
 
     const factor = matches[0];
+
+    if (!Number.isFinite(factor.value)) {
+      throw new EngineError(
+        'null_parameter_value',
+        `${gas} emission factor "${factor.id}" for fuel "${fuelId}" (${fuel.label}) in ` +
+          `category "${categoryCode}" has no published value (found ` +
+          `${JSON.stringify(factor.value)}). The engine will not estimate one.`,
+      );
+    }
+
     const emission = applyEquation2_1(massKg, energyTJ, ncv, factor, options, library);
 
     factors.push(emission.audit.factors[emission.audit.factors.length - 1]);
@@ -315,15 +343,16 @@ function emissionFactorAudit(factor: EmissionFactor): FactorAudit {
 }
 
 function missingFactorMessage(
+  fuelId: string,
   fuelLabel: string,
   gas: Gas,
   categoryCode: CategoryCode,
   vehicleTechnology?: string,
 ): string {
-  const technology = vehicleTechnology ? ` and technology "${vehicleTechnology}"` : '';
+  const technology = vehicleTechnology ? `, technology "${vehicleTechnology}"` : '';
   return (
-    `No ${gas} emission factor is published for ${fuelLabel} in category ${categoryCode}` +
-    `${technology}. No figure was produced: the engine does not substitute a similar fuel ` +
-    `or estimate a missing factor.`
+    `No ${gas} emission factor is published for fuel "${fuelId}" (${fuelLabel}) in category ` +
+    `"${categoryCode}"${technology}. The calculation was abandoned rather than returned ` +
+    `without ${gas}: the engine does not substitute a similar fuel or estimate a missing factor.`
   );
 }

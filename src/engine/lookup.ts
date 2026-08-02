@@ -58,5 +58,13 @@ export function findEmissionFactors(
     return matches;
   }
 
-  return matches.filter((factor) => factor.vehicle_technology === vehicleTechnology);
+  // The technology dimension exists only for the gases Table 3.2.2 disaggregates.
+  // Petrol CO2 comes from Table 3.2.1 and has no technology variants, so a
+  // technology selection must not filter it away — it applies to CH4 and N2O.
+  const technologySpecific = matches.filter((factor) => factor.vehicle_technology !== undefined);
+  if (technologySpecific.length === 0) {
+    return matches;
+  }
+
+  return technologySpecific.filter((factor) => factor.vehicle_technology === vehicleTechnology);
 }
