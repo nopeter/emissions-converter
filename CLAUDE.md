@@ -105,6 +105,18 @@ N2O EF 0.1 kg/TJ -> 0.00071 kg N2O
 - If a task is ambiguous, ask rather than guess. Wrong emission numbers are worse
   than a delayed feature.
 - Do not refactor beyond the scope of the task.
+- CI must be green before any PR is merged.
+
+## Blockers
+
+- If a git push, network request, or dependency install fails with a permissions
+  or authentication error, stop immediately and report it as a blocker. Do not
+  investigate commit signing, git hooks, or git internals — those are almost never
+  the cause. Do not attempt workarounds.
+- If an expected file, dependency, or piece of context is missing, stop and report
+  it as a blocker. Never search outside this git repository — not Google Drive, not
+  the web, not other local paths — to locate project files. This repository is the
+  single source of truth.
 
 ## Audience and constraints
 
