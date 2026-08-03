@@ -12,7 +12,6 @@ import type {
   Gas,
   NetCalorificValue,
   ParameterLibrary,
-  Tier,
 } from '../data/types';
 
 /** Display order for the three gases. An ordering, not a parameter. */
@@ -68,84 +67,4 @@ export function findEmissionFactors(
   }
 
   return technologySpecific.filter((factor) => factor.vehicle_technology === vehicleTechnology);
-}
-
-/** Every emission factor published for one category, whatever the fuel or gas. */
-export function findFactorsInCategory(
-  library: ParameterLibrary,
-  category: CategoryCode,
-): EmissionFactor[] {
-  return library.emission_factors.filter((factor) => factor.category === category);
-}
-
-/**
- * The fuels a category can actually be calculated for.
- *
- * A fuel qualifies only when the library publishes a factor for every gas the
- * engine reports. A partial set is not a partial answer: the engine throws on
- * it, so offering the fuel would be offering a calculation that cannot be done.
- */
-export function findFuelsCalculableIn(library: ParameterLibrary, category: CategoryCode): Fuel[] {
-  return library.fuels.filter((fuel) =>
-    GASES.every((gas) => findEmissionFactors(library, fuel.id, category, gas).length > 0),
-  );
-}
-
-/**
- * The tiers the library actually publishes factors at for one category.
- *
- * Derived, not declared. A module's supported tiers are a fact about the data it
- * has, so a Tier 3 factor arriving in the library is what makes Tier 3 available
- * — not an edit to the module.
- */
-export function findTiersInCategory(library: ParameterLibrary, category: CategoryCode): Tier[] {
-  const tiers = new Set(findFactorsInCategory(library, category).map((factor) => factor.tier));
-  return [...tiers].sort((a, b) => a - b);
-}
-
-/**
- * The tiers whose factors in this category are disaggregated by technology.
- *
- * These are the tiers at which the caller must name a technology before a single
- * factor can be selected (Vol 2 Ch 3 Table 3.2.2).
- */
-export function findTechnologyDisaggregatedTiers(
-  library: ParameterLibrary,
-  category: CategoryCode,
-): Tier[] {
-  const tiers = new Set(
-    findFactorsInCategory(library, category)
-      .filter((factor) => factor.vehicle_technology !== undefined)
-      .map((factor) => factor.tier),
-  );
-  return [...tiers].sort((a, b) => a - b);
-}
-
-/**
- * Every vehicle technology published in one category, with its label.
- *
- * Labels are the library's own `vehicle_technology_label`. Where a record
- * carries none, the raw identifier is used rather than a description invented
- * here.
- */
-export function findVehicleTechnologiesInCategory(
-  library: ParameterLibrary,
-  category: CategoryCode,
-): Array<{ value: string; label: string }> {
-  const byValue = new Map<string, string>();
-
-  for (const factor of findFactorsInCategory(library, category)) {
-    const value = factor.vehicle_technology;
-    if (value === undefined) {
-      continue;
-    }
-    const label = factor.vehicle_technology_label;
-    if (label !== undefined) {
-      byValue.set(value, label);
-    } else if (!byValue.has(value)) {
-      byValue.set(value, value);
-    }
-  }
-
-  return [...byValue].map(([value, label]) => ({ value, label }));
 }

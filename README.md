@@ -5,4 +5,3 @@ A transparent, source-cited greenhouse gas calculator based on the 2006 IPCC Gui
 ## Status
 
 Under development.
-

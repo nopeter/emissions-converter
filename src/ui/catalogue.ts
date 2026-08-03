@@ -2,14 +2,11 @@
  * What the calculator offers, derived from the parameter library.
  *
  * A fuel is offered in a category exactly when the library publishes an
- * emission factor for all three gases there. That condition is the engine's
- * `findFuelsCalculableIn`, not a rule restated here, so the list of offered
- * fuels cannot drift away from the list the engine will actually calculate.
- * It is also the completeness condition
- * `src/engine/__tests__/data-integrity.test.ts` holds the library to, so the
- * eight offered combinations are the seven on its MVP list plus petrol in road
- * transport, which the test excludes from that list only because it needs a
- * Tier 3 technology choice before it can be calculated.
+ * emission factor for all three gases there. That is the same completeness
+ * condition `src/engine/__tests__/data-integrity.test.ts` holds the library
+ * to, so the eight offered combinations are the seven on its MVP list plus
+ * petrol in road transport, which the test excludes from that list only
+ * because it needs a Tier 3 technology choice before it can be calculated.
  *
  * Nothing is hard-coded here. Had this file carried its own list of fuel ids,
  * a factor disappearing from the library would show up as a runtime engine
@@ -20,7 +17,7 @@
  */
 import { parameters } from '../data';
 import type { CategoryCode, Fuel } from '../data/types';
-import { findEmissionFactors, findFuelsCalculableIn, GASES } from '../engine';
+import { findEmissionFactors, GASES } from '../engine';
 
 export interface OfferedFuel {
   id: string;
@@ -53,6 +50,10 @@ export interface ConversionNote {
   densityId: string;
 }
 
+function hasCompleteFactorSet(fuelId: string, category: CategoryCode): boolean {
+  return GASES.every((gas) => findEmissionFactors(parameters, fuelId, category, gas).length > 0);
+}
+
 /** "Energy > Fuel combustion > Other sectors > Residential" -> "Residential". */
 function shortCategoryLabel(fullLabel: string): string {
   const parts = fullLabel.split('>');
@@ -64,11 +65,9 @@ export const CATEGORIES: OfferedCategory[] = Object.entries(parameters.categorie
     code,
     fullLabel,
     label: shortCategoryLabel(fullLabel),
-    fuels: findFuelsCalculableIn(parameters, code).map((fuel) => ({
-      id: fuel.id,
-      label: fuel.label,
-      fuel,
-    })),
+    fuels: parameters.fuels
+      .filter((fuel) => hasCompleteFactorSet(fuel.id, code))
+      .map((fuel) => ({ id: fuel.id, label: fuel.label, fuel })),
   }))
   .filter((category) => category.fuels.length > 0);
 
