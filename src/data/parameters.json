@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.0.0",
-  "library_version": "0.1.0",
-  "updated": "2026-08-02",
+  "schema_version": "1.1.0",
+  "library_version": "0.2.0",
+  "updated": "2026-08-03",
   "methodology": "2006 IPCC Guidelines for National Greenhouse Gas Inventories",
   "readme": "Every record carries a provenance class. 'ipcc' values were read directly from the cited table of the 2006 IPCC Guidelines. 'external' values come from outside the Guidelines and must name their own source. 'assumed' values are our own simplifications. Nothing in this file may be treated as verified unless verified is true.",
 
@@ -26,6 +26,7 @@
   "net_calorific_values": [
     {
       "id": "ncv_lpg",
+      "category": "1A",
       "fuel": "liquefied_petroleum_gases",
       "label": "Liquefied petroleum gas (LPG)",
       "value": 47.3,
@@ -39,6 +40,7 @@
     },
     {
       "id": "ncv_charcoal",
+      "category": "1A",
       "fuel": "charcoal",
       "label": "Charcoal",
       "value": 29.5,
@@ -52,6 +54,7 @@
     },
     {
       "id": "ncv_wood",
+      "category": "1A",
       "fuel": "wood_wood_waste",
       "label": "Firewood / wood waste",
       "value": 15.6,
@@ -65,6 +68,7 @@
     },
     {
       "id": "ncv_other_kerosene",
+      "category": "1A",
       "fuel": "other_kerosene",
       "label": "Kerosene",
       "value": 43.8,
@@ -78,6 +82,7 @@
     },
     {
       "id": "ncv_motor_gasoline",
+      "category": "1A",
       "fuel": "motor_gasoline",
       "label": "Petrol (motor gasoline)",
       "value": 44.3,
@@ -91,6 +96,7 @@
     },
     {
       "id": "ncv_gas_diesel_oil",
+      "category": "1A",
       "fuel": "gas_diesel_oil",
       "label": "Diesel (gas/diesel oil)",
       "value": 43.0,
@@ -104,6 +110,7 @@
     },
     {
       "id": "ncv_natural_gas",
+      "category": "1A",
       "fuel": "natural_gas",
       "label": "Natural gas",
       "value": 48.0,
@@ -120,6 +127,7 @@
   "fuels": [
     {
       "id": "liquefied_petroleum_gases",
+      "category": "1A",
       "label": "Liquefied petroleum gas (LPG)",
       "biomass": false,
       "sold_by": "mass",
@@ -128,6 +136,7 @@
     },
     {
       "id": "charcoal",
+      "category": "1A",
       "label": "Charcoal",
       "biomass": true,
       "sold_by": "mass",
@@ -137,6 +146,7 @@
     },
     {
       "id": "wood_wood_waste",
+      "category": "1A",
       "label": "Firewood / wood waste",
       "biomass": true,
       "sold_by": "mass",
@@ -146,6 +156,7 @@
     },
     {
       "id": "other_kerosene",
+      "category": "1A",
       "label": "Kerosene",
       "biomass": false,
       "sold_by": "volume",
@@ -155,6 +166,7 @@
     },
     {
       "id": "motor_gasoline",
+      "category": "1A",
       "label": "Petrol (motor gasoline)",
       "biomass": false,
       "sold_by": "volume",
@@ -164,6 +176,7 @@
     },
     {
       "id": "gas_diesel_oil",
+      "category": "1A",
       "label": "Diesel (gas/diesel oil)",
       "biomass": false,
       "sold_by": "volume",
@@ -173,6 +186,7 @@
     },
     {
       "id": "natural_gas",
+      "category": "1A",
       "label": "Natural gas",
       "biomass": false,
       "sold_by": "volume_or_energy",
@@ -610,6 +624,7 @@
   "densities": [
     {
       "id": "density_motor_gasoline",
+      "category": "1A",
       "fuel": "motor_gasoline",
       "value": null,
       "unit": "kg/litre",
@@ -621,6 +636,7 @@
     },
     {
       "id": "density_gas_diesel_oil",
+      "category": "1A",
       "fuel": "gas_diesel_oil",
       "value": null,
       "unit": "kg/litre",
@@ -632,6 +648,7 @@
     },
     {
       "id": "density_other_kerosene",
+      "category": "1A",
       "fuel": "other_kerosene",
       "value": null,
       "unit": "kg/litre",
@@ -643,6 +660,7 @@
     },
     {
       "id": "density_natural_gas",
+      "category": "1A",
       "fuel": "natural_gas",
       "value": null,
       "unit": "kg/m3",
@@ -657,6 +675,7 @@
   "gwp_sets": [
     {
       "id": "gwp_ar4_100",
+      "category": null,
       "label": "IPCC Fourth Assessment Report, 100-year",
       "horizon_years": 100,
       "values": { "CO2": 1, "CH4": 25, "N2O": 298 },
@@ -668,6 +687,7 @@
     },
     {
       "id": "gwp_ar5_100",
+      "category": null,
       "label": "IPCC Fifth Assessment Report, 100-year",
       "horizon_years": 100,
       "values": { "CO2": 1, "CH4": 28, "N2O": 265 },
@@ -679,6 +699,7 @@
     },
     {
       "id": "gwp_ar6_100",
+      "category": null,
       "label": "IPCC Sixth Assessment Report, 100-year",
       "horizon_years": 100,
       "values": { "CO2": 1, "CH4": 27.9, "N2O": 273 },

@@ -14,6 +14,28 @@ to a user must be traceable to a cited source and must carry an uncertainty rang
 A competitor can copy the arithmetic. They cannot easily copy a fully cited,
 uncertainty-carrying parameter library.
 
+## Scope
+
+The target is a **full implementation of the 2006 IPCC Guidelines** across all four
+sectors — Energy, IPPU, AFOLU and Waste — built sector by sector, not a fixed
+handful of categories.
+
+**Energy (Volume 2) comes first, all six chapters.** Only then IPPU (Vol 3), AFOLU
+(Vol 4) and Waste (Vol 5).
+
+Categories that exist in the Guidelines but that no module implements yet are
+visible as unimplemented. An unimplemented category is a gap in the calculator; it
+is never reported as zero.
+
+Simple mode is a preset layer over the full engine — a preset only pre-fills
+inputs. It must never introduce a separate calculation path.
+
+Two open methodological questions travel with this scope, and are to be answered
+when those sectors are built rather than treated as reasons to exclude them: the
+Vol 4 (AFOLU) methods are producer-side, and Vol 5's First Order Decay is
+inherently multi-year and national. Downscaling either to one household needs a
+stated, defensible basis before it ships.
+
 ## Non-negotiable domain rules
 
 These are correctness requirements, not preferences. Violating them makes the
@@ -73,14 +95,27 @@ zero-dependency solutions for anything the standard library can do.
 ## Architecture
 
 - `src/data/` — the parameter library. Versioned JSON. The most valuable asset
-  in the repo. Changes here require a version bump and a changelog entry.
+  in the repo. Changes here require a version bump and a changelog entry. Every
+  record declares the IPCC `category` it belongs to, and the library is indexable
+  by category code.
 - `src/engine/` — pure calculation functions. No React, no DOM, no I/O.
   Every function returns both a result and an audit trail (inputs, factor used,
   factor source, equation applied).
+- `src/engine/registry.ts` — the IPCC category tree: code, name, sector, volume,
+  parent, and the module that calculates it. A category's full name is derived
+  from its ancestors and must match the parameter library's own label for it.
+- `src/engine/module.ts` — the interface every category's method implements:
+  `declareInputs()`, `availableTiers()`, `calculate(inputs, tier, options)`.
 - `src/ui/` — React components. Presentation only. Must not contain arithmetic.
 - `src/engine/__tests__/` — fixture tests, hand-calculated from the Guidelines.
 
 The engine must be testable without a browser.
+
+Adding a category means adding a definition to the registry, a module that
+implements the interface, and its parameters — not editing the interface or the
+user interface. A module declares its inputs and the tiers it supports; both are
+derived from what the parameter library actually publishes, so a new factor
+arriving in the library is what makes a tier available.
 
 ## Testing
 
@@ -126,7 +161,4 @@ account required. Keep the JavaScript bundle small.
 
 ## Out of scope for now
 
-- Diet and food emissions (IPCC Vol 4 methods are producer-side, not consumer-side)
-- Landfill methane attributed to individuals (First Order Decay is inherently
-  multi-year and national; it cannot be honestly downscaled)
 - User accounts, payments, and any server-side feature
