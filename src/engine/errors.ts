@@ -35,4 +35,26 @@ export type EngineErrorCode =
   /** The parameter record exists but its value is null or not a finite number. */
   | 'null_parameter_value'
   /** The parameter is published in a unit the engine does not know how to apply. */
-  | 'unexpected_unit';
+  | 'unexpected_unit'
+  /** An input was supplied that the module's schema does not declare. */
+  | 'unknown_input'
+  /** A required input was not supplied, and the engine will not default it. */
+  | 'missing_required_input'
+  /** An input was supplied in a different shape from the one declared. */
+  | 'wrong_input_shape'
+  /** The input exists but belongs to a different tier of the same method. */
+  | 'input_not_available_at_tier'
+  /** The input's shape (time series, matrix) has no implementation yet. */
+  | 'unimplemented_input_shape'
+  /** The module does not support the requested tier for this category. */
+  | 'unsupported_tier'
+  /** Two category definitions share a code. */
+  | 'duplicate_category'
+  /** A category names a parent that is not itself defined. */
+  | 'unknown_parent_category'
+  /** A chain of parent codes loops back on itself, so the categories are not a tree. */
+  | 'category_cycle'
+  /** Two modules claim the same category, so which one calculates it is undefined. */
+  | 'duplicate_module'
+  /** The category exists in the tree but nothing can calculate it yet. */
+  | 'no_module_for_category';

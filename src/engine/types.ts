@@ -126,6 +126,34 @@ export interface ParameterGap {
   message: string;
 }
 
+/** Which version of the parameter library produced a figure. */
+export interface LibraryAudit {
+  schemaVersion: string;
+  libraryVersion: string;
+  updated: string;
+  methodology: string;
+}
+
+/**
+ * The part of a result every calculation module produces, whatever it computes.
+ *
+ * Gases stay separate and biomass CO2 stays out of the total, in every category
+ * and every sector (CLAUDE.md rules 3 and 4). A module that flattened these into
+ * a single number would not satisfy the module interface.
+ */
+export interface CalculationResult {
+  categoryCode: CategoryCode;
+  categoryLabel: string;
+  /** Gases that count towards the headline total. */
+  totalContributing: GasEmission[];
+  /** Gases reported separately and excluded from the headline total. */
+  memoItems: GasEmission[];
+  /** Caveats on the figures above; never a substitute for a missing factor. */
+  gaps: ParameterGap[];
+  /** Everything needed to reconstruct the calculation. Detail is module-specific. */
+  audit: { library: LibraryAudit };
+}
+
 /** How the input mass became an energy quantity. */
 export interface EnergyConversionAudit {
   equation: string;
@@ -139,12 +167,7 @@ export interface EnergyConversionAudit {
 
 /** Everything needed to reconstruct the calculation from the inputs. */
 export interface CombustionAudit {
-  library: {
-    schemaVersion: string;
-    libraryVersion: string;
-    updated: string;
-    methodology: string;
-  };
+  library: LibraryAudit;
   inputs: {
     fuelId: string;
     massKg: number;
@@ -158,20 +181,14 @@ export interface CombustionAudit {
 }
 
 /** The full result of a fuel-combustion calculation. */
-export interface CombustionResult {
+export interface CombustionResult extends CalculationResult {
   fuelId: string;
   fuelLabel: string;
   biomass: boolean;
-  categoryCode: CategoryCode;
-  categoryLabel: string;
   massKg: number;
   energyTJ: number;
-  /** Gases that count towards the headline total. */
-  totalContributing: GasEmission[];
-  /** Gases reported separately and excluded from the headline total. */
-  memoItems: GasEmission[];
   /**
-   * Caveats on the figures above. Never a substitute for a missing factor: if a
+   * Caveats on the figures. Never a substitute for a missing factor: if a
    * factor were missing, this result would not exist.
    */
   gaps: ParameterGap[];

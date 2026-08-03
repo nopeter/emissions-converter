@@ -1,6 +1,9 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{ts,tsx}'],
+  // Class names exist only in src/ui. Scanning the engine as well made the
+  // stylesheet grow whenever engine prose happened to contain a word Tailwind
+  // recognises as a utility, shipping rules that match nothing.
+  content: ['./index.html', './src/ui/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
