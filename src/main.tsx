@@ -1,11 +1,14 @@
-// Scaffolding entry point only. There is no user interface yet: this renders an
-// empty root element so that `npm run build` produces a valid `dist`.
-import React from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { App } from './ui/App';
 import './index.css';
 
 const container = document.getElementById('root');
 
 if (container) {
-  createRoot(container).render(React.createElement(React.Fragment));
+  createRoot(container).render(
+    <StrictMode>
+      <App />
+    </StrictMode>,
+  );
 }
