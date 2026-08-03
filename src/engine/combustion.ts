@@ -20,11 +20,6 @@
  * assert that every fuel has a calorific value and every Tier 1 (fuel, category,
  * gas) combination has a factor, and a regression in `parameters.json` becomes a
  * failing test instead of a quietly missing gas.
- *
- * `createFuelCombustionModule` at the foot of this file exposes the same
- * calculation through the interface every IPCC category's method implements, so
- * the registry can reach 1A4b and 1A3b the same way it will reach the rest of
- * the Guidelines. The arithmetic has one home, and that is here.
  */
 import { parameters } from '../data';
 import type {
@@ -33,36 +28,10 @@ import type {
   Gas,
   NetCalorificValue,
   ParameterLibrary,
-  Tier,
 } from '../data/types';
 import { EngineError } from './errors';
 import { formatNumber } from './format';
-import {
-  findCategoryLabel,
-  findEmissionFactors,
-  findFuel,
-  findFuelsCalculableIn,
-  findNetCalorificValue,
-  findTechnologyDisaggregatedTiers,
-  findTiersInCategory,
-  findVehicleTechnologiesInCategory,
-  GASES,
-} from './lookup';
-import {
-  assertTierSupported,
-  readOptionalScalar,
-  readOptionalSelection,
-  readScalar,
-  readSelection,
-  requiredInputsAt,
-  validateInputs,
-  type CalculateOptions,
-  type CalculationModule,
-  type InputDeclaration,
-  type InputSchema,
-  type ModuleInputs,
-  type TierSupport,
-} from './module';
+import { findCategoryLabel, findEmissionFactors, findFuel, findNetCalorificValue, GASES } from './lookup';
 import type {
   CombustionAudit,
   CombustionOptions,
@@ -370,158 +339,6 @@ function emissionFactorAudit(factor: EmissionFactor): FactorAudit {
     ci95High: factor.ci95_high,
     tier: factor.tier,
     note: factor.note,
-  };
-}
-
-/**
- * The method identifier for fuel combustion.
- *
- * One method, many categories: the Guidelines apply Eq 2.1 to every 1A
- * subcategory, changing only which table the factors come from.
- */
-export const FUEL_COMBUSTION_MODULE_ID = 'fuel_combustion';
-
-/** Input names this module declares. Used by the module and by its tests. */
-export const FUEL_COMBUSTION_INPUTS = {
-  fuel: 'fuel',
-  mass: 'mass',
-  vehicleTechnology: 'vehicleTechnology',
-  activityDataUncertaintyPercent: 'activityDataUncertaintyPercent',
-} as const;
-
-/** The unit the calculator takes fuel quantities in. */
-const MASS_UNIT = 'kg';
-
-/** The unit an uncertainty is expressed in, per the library's own convention. */
-const PERCENT_UNIT = '%';
-
-function fuelCombustionSchema(library: ParameterLibrary, categoryCode: CategoryCode): InputSchema {
-  const tiers = findTiersInCategory(library, categoryCode);
-  const technologyTiers = findTechnologyDisaggregatedTiers(library, categoryCode);
-
-  const inputs: InputDeclaration[] = [
-    {
-      name: FUEL_COMBUSTION_INPUTS.fuel,
-      label: 'Fuel',
-      shape: 'selection',
-      unit: null,
-      description:
-        'Which fuel was burned. Only fuels the library publishes a complete factor set for in ' +
-        'this category are offered; a similar fuel is never substituted.',
-      availableAtTiers: tiers,
-      requiredAtTiers: tiers,
-      options: findFuelsCalculableIn(library, categoryCode).map((fuel) => ({
-        value: fuel.id,
-        label: fuel.label,
-      })),
-    },
-    {
-      name: FUEL_COMBUSTION_INPUTS.mass,
-      label: 'Mass burned',
-      shape: 'scalar',
-      unit: MASS_UNIT,
-      description: 'Mass of fuel burned, which the net calorific value converts to energy.',
-      availableAtTiers: tiers,
-      requiredAtTiers: tiers,
-    },
-  ];
-
-  if (technologyTiers.length > 0) {
-    inputs.push({
-      name: FUEL_COMBUSTION_INPUTS.vehicleTechnology,
-      label: 'Vehicle technology',
-      shape: 'selection',
-      unit: null,
-      description:
-        'Which technology the fuel was burned in. The Guidelines publish a separate factor per ' +
-        'technology, so this selects between them; it is not accepted at tiers that use a ' +
-        'single default factor.',
-      availableAtTiers: technologyTiers,
-      requiredAtTiers: technologyTiers,
-      options: findVehicleTechnologiesInCategory(library, categoryCode),
-    });
-  }
-
-  inputs.push({
-    name: FUEL_COMBUSTION_INPUTS.activityDataUncertaintyPercent,
-    label: 'Uncertainty of the entered mass',
-    shape: 'scalar',
-    unit: PERCENT_UNIT,
-    description:
-      'Percentage uncertainty of the activity data. Left out of the Eq 3.1 combination when not ' +
-      'given, rather than assumed to be zero.',
-    availableAtTiers: tiers,
-    requiredAtTiers: [],
-  });
-
-  return { categoryCode, inputs };
-}
-
-function fuelCombustionTiers(
-  library: ParameterLibrary,
-  categoryCode: CategoryCode,
-): TierSupport[] {
-  const schema = fuelCombustionSchema(library, categoryCode);
-  const technologyTiers = findTechnologyDisaggregatedTiers(library, categoryCode);
-
-  return findTiersInCategory(library, categoryCode).map((tier) => ({
-    tier,
-    requires: technologyTiers.includes(tier)
-      ? 'Factors disaggregated by technology (Vol 2 Ch 3, Table 3.2.2). The technology must be ' +
-        'named before a single factor can be selected.'
-      : 'The default factors the Guidelines publish for this category, applied to a fuel mass.',
-    requiredInputs: requiredInputsAt(schema, tier).map((input) => input.name),
-  }));
-}
-
-/**
- * Fuel combustion as a calculation module, bound to one category.
- *
- * The arithmetic is `calculateFuelCombustion` above and is unchanged: this
- * wraps it in the interface every category's method implements, so that 1A4b and
- * 1A3b can be reached through the registry the same way a future 1B1a or 4A1
- * will be. Two categories, two instances — each declaring the fuels, tiers and
- * technologies the library actually publishes for it.
- */
-export function createFuelCombustionModule(
-  categoryCode: CategoryCode,
-): CalculationModule<CombustionResult> {
-  return {
-    id: FUEL_COMBUSTION_MODULE_ID,
-    label: 'Fuel combustion (Vol 2 Ch 2, Eq 2.1)',
-    categoryCode,
-
-    declareInputs(): InputSchema {
-      return fuelCombustionSchema(parameters, categoryCode);
-    },
-
-    availableTiers(): readonly TierSupport[] {
-      return fuelCombustionTiers(parameters, categoryCode);
-    },
-
-    calculate(inputs: ModuleInputs, tier: Tier, options: CalculateOptions = {}): CombustionResult {
-      const library = options.library ?? parameters;
-
-      assertTierSupported(categoryCode, fuelCombustionTiers(library, categoryCode), tier);
-      validateInputs(fuelCombustionSchema(library, categoryCode), inputs, tier);
-
-      return calculateFuelCombustion(
-        readSelection(inputs, FUEL_COMBUSTION_INPUTS.fuel),
-        readScalar(inputs, FUEL_COMBUSTION_INPUTS.mass),
-        categoryCode,
-        {
-          vehicleTechnology: readOptionalSelection(
-            inputs,
-            FUEL_COMBUSTION_INPUTS.vehicleTechnology,
-          ),
-          activityDataUncertaintyPercent: readOptionalScalar(
-            inputs,
-            FUEL_COMBUSTION_INPUTS.activityDataUncertaintyPercent,
-          ),
-        },
-        library,
-      );
-    },
   };
 }
 

@@ -41,19 +41,6 @@ export interface ConfidenceInterval95 {
 /** Fields every parameter record carries, whatever kind of parameter it is. */
 export interface ProvenancedRecord {
   id: string;
-  /**
-   * The IPCC category this parameter belongs to, so the library can be indexed
-   * by the same tree the engine's modules are registered against.
-   *
-   * A parameter used across a whole branch is filed at that branch: the net
-   * calorific values of Vol 2 Ch 1 Table 1.2 are used everywhere fuel is burned,
-   * so they sit at "1A" rather than being repeated on every subcategory.
-   *
-   * `null` means the record genuinely belongs to no category. Global warming
-   * potentials are the case in point: they are applied to every gas from every
-   * source, so filing them under one code would be false precision.
-   */
-  category: CategoryCode | null;
   provenance: Provenance;
   /** Naming the IPCC volume/chapter/table, or the external source. `null` when unsourced. */
   source: string | null;
@@ -64,8 +51,6 @@ export interface ProvenancedRecord {
 
 /** Net calorific value, used to convert a fuel mass into energy. */
 export interface NetCalorificValue extends ProvenancedRecord, ConfidenceInterval95 {
-  /** "1A": a calorific value applies wherever the fuel is burned. */
-  category: CategoryCode;
   fuel: string;
   label: string;
   value: number;
@@ -82,8 +67,6 @@ export interface NetCalorificValue extends ProvenancedRecord, ConfidenceInterval
 /** A fuel the calculator knows about. */
 export interface Fuel {
   id: string;
-  /** "1A": the fuel list exists to serve fuel combustion. */
-  category: CategoryCode;
   label: string;
   /**
    * True for biofuels. Their CO2 is a memo item; their CH4 and N2O are not.
@@ -129,8 +112,6 @@ export interface EmissionFactor extends ProvenancedRecord, ConfidenceInterval95 
  * knowledge (CLAUDE.md rule 7).
  */
 export interface Density extends ProvenancedRecord {
-  /** "1A": a density converts a purchased volume of a combustion fuel to mass. */
-  category: CategoryCode;
   fuel: string;
   value: number | null;
   unit: string;
