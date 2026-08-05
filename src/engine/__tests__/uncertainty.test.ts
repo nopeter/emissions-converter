@@ -11,7 +11,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import { calculateFuelCombustion } from '../combustion';
-import { combineMultiplicative, evaluateCandidate, intervalToPercent, isAsymmetric } from '../uncertainty';
+import {
+  combineAdditive,
+  combineMultiplicative,
+  evaluateCandidate,
+  intervalToPercent,
+  isAsymmetric,
+} from '../uncertainty';
 import type { GasEmission } from '../types';
 
 function gas(emissions: GasEmission[], name: string): GasEmission {
@@ -228,5 +234,111 @@ describe('combineMultiplicative', () => {
       ci95High: 1,
     });
     expect('skipped' in outcome && outcome.skipped.reason).toBe('zero_central_value');
+  });
+});
+
+/**
+ * Vol 1 Ch 3 Eq 3.2, addition.
+ *
+ *   U_total = sqrt(sum((Ui x xi)^2)) / |sum(xi)|
+ *
+ * The difference from Eq 3.1 that matters is the weighting: a term's influence
+ * scales with its size, so a large uncertainty on a small quantity barely moves
+ * the total. These fixtures are chosen so the arithmetic can be checked by eye.
+ */
+describe('Eq 3.2, addition', () => {
+  const equation = 'U_total = sqrt(sum((Ui * xi)^2)) / sum(xi)  [Vol 1 Ch 3, Eq 3.2]';
+
+  it('combines two equal terms to U / sqrt(2)', () => {
+    //   x1 = 100, U1 = 10 %;  x2 = 100, U2 = 10 %
+    //   numerator   = sqrt((10 x 100)^2 + (10 x 100)^2) = sqrt(2) x 1000
+    //   denominator = 200
+    //   U_total     = sqrt(2) x 1000 / 200 = 10 / sqrt(2) = 7.0710678...
+    const result = combineAdditive(
+      [
+        { parameterId: 'a', role: 'emission_factor', label: 'A', value: 100, percent: 10 },
+        { parameterId: 'b', role: 'emission_factor', label: 'B', value: 100, percent: 10 },
+      ],
+      equation,
+    );
+    expect(result.percent).toBeCloseTo(10 / Math.SQRT2, 12);
+  });
+
+  it('weights each term by its size, not just by its percentage', () => {
+    //   x1 = 1000, U1 =  1 %  ->  Ui x xi = 1000
+    //   x2 =   10, U2 = 50 %  ->  Ui x xi =  500
+    //   numerator   = sqrt(1000^2 + 500^2) = sqrt(1 250 000) = 1118.033988749895
+    //   denominator = 1010
+    //   U_total     = 1.10696434529693 %
+    //
+    // The 50 % term moves the total by about a tenth of a percentage point.
+    // Under Eq 3.1 it would have dominated, which is why using the wrong
+    // equation here would be a large, silent error rather than a rounding one.
+    const result = combineAdditive(
+      [
+        { parameterId: 'big', role: 'emission_factor', label: 'Big', value: 1000, percent: 1 },
+        { parameterId: 'small', role: 'emission_factor', label: 'Small', value: 10, percent: 50 },
+      ],
+      equation,
+    );
+    expect(result.percent).toBeCloseTo(Math.sqrt(1_250_000) / 1010, 12);
+    expect(result.percent).toBeCloseTo(1.10696434529693, 10);
+  });
+
+  it('leaves out a term with no quantified uncertainty and says so', () => {
+    const result = combineAdditive(
+      [
+        { parameterId: 'a', role: 'emission_factor', label: 'A', value: 100, percent: 10 },
+        { parameterId: 'b', role: 'emission_factor', label: 'B', value: 100, percent: null },
+      ],
+      equation,
+    );
+    // Only A is combined, so the figure is A's own percentage and is a lower bound.
+    expect(result.percent).toBeCloseTo(10, 12);
+    expect(result.incomplete).toBe(true);
+    expect(result.skipped.map((term) => term.parameterId)).toEqual(['b']);
+    expect(result.skipped[0].reason).toBe('confidence_interval_not_published');
+  });
+
+  it('leaves out a term that contributes nothing to the sum', () => {
+    const result = combineAdditive(
+      [
+        { parameterId: 'a', role: 'emission_factor', label: 'A', value: 100, percent: 10 },
+        { parameterId: 'zero', role: 'emission_factor', label: 'Zero', value: 0, percent: 40 },
+      ],
+      equation,
+    );
+    expect(result.percent).toBeCloseTo(10, 12);
+    expect(result.skipped.map((term) => term.reason)).toEqual(['zero_central_value']);
+  });
+
+  it('returns null rather than dividing by a zero sum', () => {
+    const result = combineAdditive(
+      [{ parameterId: 'a', role: 'emission_factor', label: 'A', value: 0, percent: 10 }],
+      equation,
+    );
+    expect(result.percent).toBeNull();
+  });
+
+  it('carries omissions and symmetrisations from an earlier step', () => {
+    // An Eq 3.1 step happens before this one, per gas. What it had to leave out
+    // must not be forgotten when its output is added up.
+    const result = combineAdditive(
+      [{ parameterId: 'a', role: 'emission_factor', label: 'A', value: 100, percent: 10 }],
+      equation,
+      [
+        {
+          parameterId: 'earlier',
+          role: 'global_warming_potential',
+          label: 'Earlier omission',
+          reason: 'confidence_interval_not_published',
+          note: 'No interval published.',
+        },
+      ],
+      ['ncv_lpg'],
+    );
+    expect(result.incomplete).toBe(true);
+    expect(result.skipped.map((term) => term.parameterId)).toEqual(['earlier']);
+    expect(result.symmetrisedParameters).toEqual(['ncv_lpg']);
   });
 });

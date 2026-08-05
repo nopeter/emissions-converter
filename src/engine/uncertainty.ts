@@ -1,10 +1,10 @@
 /**
  * Uncertainty propagation, Approach 1 (2006 IPCC Guidelines, Vol 1 Ch 3).
  *
- * Only Eq 3.1 (multiplication) is implemented here, because a single fuel's
- * emission is a product: energy x emission factor. Eq 3.2 (addition) belongs
- * with the code that sums several fuels into a household total, and is not part
- * of this change.
+ * Eq 3.1 (multiplication) combines the terms of a product: a single fuel's
+ * emission is energy x emission factor. Eq 3.2 (addition) combines the terms of
+ * a sum, which is what a CO2-equivalent total is — three gases, each already
+ * multiplied by its own GWP, added together.
  *
  * Two rules from CLAUDE.md are enforced structurally rather than by convention:
  *
@@ -182,5 +182,105 @@ export function combineMultiplicative(
     skipped,
     incomplete: skipped.length > 0,
     symmetrisedParameters: terms.filter((t) => t.asymmetric).map((t) => t.parameterId),
+  };
+}
+
+/** A quantity entering a sum, with the uncertainty it already carries. */
+export interface AdditiveCandidate {
+  parameterId: string;
+  role: ParameterRole;
+  label: string;
+  /** The quantity being added, in the units of the sum. */
+  value: number;
+  /** Its percentage uncertainty, or null when it has none to contribute. */
+  percent: number | null;
+  /** Explains the omission when `percent` is null. */
+  missingNote?: string;
+}
+
+/**
+ * Combine uncertainties for a sum of quantities.
+ *
+ * Vol 1 Ch 3, Eq 3.2:  U_total = sqrt(sum((Ui x xi)^2)) / |sum(xi)|
+ *
+ * Unlike Eq 3.1 this is weighted: a term's contribution scales with how large it
+ * is. That is why a CO2-equivalent total is dominated by whichever gas carries
+ * the most CO2-eq, and why the methane and nitrous oxide percentages, large as
+ * they are, move the total so little for a fossil fuel.
+ *
+ * Ui is a percentage and xi a quantity, so the quotient is already a percentage
+ * and is not rescaled.
+ *
+ * @param equation the equation text, quoted from the parameter library.
+ * @param alreadySkipped omissions established before this step, carried in so
+ *   they travel with the combined figure rather than being lost.
+ * @param symmetrisedParameters ids symmetrised in an earlier step, likewise.
+ */
+export function combineAdditive(
+  candidates: AdditiveCandidate[],
+  equation: string,
+  alreadySkipped: SkippedUncertaintyTerm[] = [],
+  symmetrisedParameters: string[] = [],
+): UncertaintyResult {
+  const terms: UncertaintyTerm[] = [];
+  const skipped: SkippedUncertaintyTerm[] = [...alreadySkipped];
+
+  for (const candidate of candidates) {
+    const { parameterId, role, label } = candidate;
+
+    if (candidate.percent === null) {
+      skipped.push({
+        parameterId,
+        role,
+        label,
+        reason: 'confidence_interval_not_published',
+        note:
+          candidate.missingNote ??
+          `${label} carries no quantified uncertainty, so it was left out of the Eq 3.2 ` +
+            `combination. The combined uncertainty is therefore a lower bound.`,
+      });
+      continue;
+    }
+
+    if (candidate.value === 0) {
+      skipped.push({
+        parameterId,
+        role,
+        label,
+        reason: 'zero_central_value',
+        note:
+          `${label} contributes zero to the sum, so it carries no weight under Eq 3.2 and ` +
+          `was left out of the combination.`,
+      });
+      continue;
+    }
+
+    terms.push({
+      parameterId,
+      role,
+      label,
+      value: candidate.value,
+      ci95Low: candidate.value * (1 - candidate.percent / 100),
+      ci95High: candidate.value * (1 + candidate.percent / 100),
+      percent: candidate.percent,
+      asymmetric: false,
+    });
+  }
+
+  const sum = terms.reduce((total, term) => total + term.value, 0);
+  const sumOfSquares = terms.reduce(
+    (total, term) => total + (term.percent * term.value) ** 2,
+    0,
+  );
+
+  return {
+    equation,
+    // A zero sum leaves the percentage undefined rather than infinite: every
+    // term was skipped above, so there is nothing to divide.
+    percent: terms.length > 0 && sum !== 0 ? Math.sqrt(sumOfSquares) / Math.abs(sum) : null,
+    terms,
+    skipped,
+    incomplete: skipped.length > 0,
+    symmetrisedParameters: [...symmetrisedParameters],
   };
 }

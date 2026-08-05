@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parameters } from '../../data';
+import { toCarbonDioxideEquivalent } from '../co2e';
 import { calculateFuelCombustion } from '../combustion';
 import { EngineError } from '../errors';
 import type { CombustionResult } from '../types';
@@ -139,5 +140,98 @@ describe('the memo/total split is consistent everywhere', () => {
         expect(emission.memoItem).toBe(record?.memo_item === true);
       }
     }
+  });
+});
+
+/**
+ * The same invariant, after conversion to CO2-equivalent.
+ *
+ * This is the refactor rule 3 is most likely to be lost in. Restating gases in a
+ * common unit and adding them up is exactly the operation that makes folding
+ * biomass CO2 into the total look reasonable — it is, after all, now measured in
+ * the same unit as everything else. It must not be folded in, under any GWP set.
+ */
+describe('CO2-equivalent totals exclude biomass CO2', () => {
+  const results = everyComputablePair();
+
+  it('has biomass results to check', () => {
+    expect(results.some((result) => result.memoItems.length > 0)).toBe(true);
+  });
+
+  for (const set of parameters.gwp_sets) {
+    describe(set.label, () => {
+      it('never counts a memo item towards the total', () => {
+        for (const result of results) {
+          const co2e = toCarbonDioxideEquivalent(result, set.id);
+
+          expect(co2e.contributing.every((item) => !item.memoItem)).toBe(true);
+          expect(co2e.memoItems.every((item) => item.memoItem)).toBe(true);
+
+          // The total is exactly the contributing gases and nothing else.
+          const contributingSum = co2e.contributing.reduce(
+            (total, item) => total + item.co2eKg,
+            0,
+          );
+          expect(co2e.totalKg).toBeCloseTo(contributingSum, 12);
+        }
+      });
+
+      it('keeps every biomass CO2 figure out of the total and in memo', () => {
+        for (const result of results.filter((candidate) => candidate.memoItems.length > 0)) {
+          const co2e = toCarbonDioxideEquivalent(result, set.id);
+
+          expect(co2e.memoItems.map((item) => item.gas)).toEqual(['CO2']);
+          expect(co2e.memoTotalKg).toBeGreaterThan(0);
+          expect(co2e.contributing.some((item) => item.gas === 'CO2')).toBe(false);
+        }
+      });
+
+      it('still counts biomass CH4 and N2O towards the total', () => {
+        // The other half of rule 3, and the easier half to lose: excluding the
+        // whole fuel would be as wrong as including its CO2.
+        for (const result of results.filter((candidate) => candidate.memoItems.length > 0)) {
+          const gases = toCarbonDioxideEquivalent(result, set.id).contributing.map(
+            (item) => item.gas,
+          );
+          expect(gases).toContain('CH4');
+          expect(gases).toContain('N2O');
+        }
+      });
+    });
+  }
+});
+
+describe('AR6 methane origin follows the fuel, across the whole library', () => {
+  const results = everyComputablePair();
+  const ar6 = parameters.gwp_sets.find((set) => set.fossil_split);
+
+  it('has a set that splits methane by origin', () => {
+    expect(ar6).toBeDefined();
+  });
+
+  it('gives every biomass fuel the non-fossil value and every other fuel the fossil one', () => {
+    for (const result of results) {
+      const methane = toCarbonDioxideEquivalent(result, ar6!.id).contributing.find(
+        (item) => item.gas === 'CH4',
+      );
+      expect(methane).toBeDefined();
+      expect(methane?.gwp.origin).toBe(result.biomass ? 'non_fossil' : 'fossil');
+    }
+  });
+
+  it('gives biomass fuels a lower methane GWP than fossil fuels', () => {
+    // AR6's non-fossil methane GWP is the lower of the two. If this inverts,
+    // the origin selection has been wired backwards — which a per-fuel test
+    // using only one fuel would not catch.
+    const gwpFor = (biomass: boolean): number => {
+      const result = results.find((candidate) => candidate.biomass === biomass);
+      expect(result).toBeDefined();
+      const methane = toCarbonDioxideEquivalent(result!, ar6!.id).contributing.find(
+        (item) => item.gas === 'CH4',
+      );
+      return methane?.gwp.value ?? 0;
+    };
+
+    expect(gwpFor(true)).toBeLessThan(gwpFor(false));
   });
 });

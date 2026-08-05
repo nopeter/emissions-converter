@@ -112,6 +112,40 @@ export function technologyOptions(fuelId: string, category: CategoryCode): Techn
   return [...byValue.values()];
 }
 
+/** A GWP set the user can switch the total to. */
+export interface OfferedGwpSet {
+  id: string;
+  label: string;
+  /** True when the set publishes separate fossil and non-fossil methane GWPs. */
+  fossilSplit: boolean;
+}
+
+/**
+ * Every GWP set in the library, in library order.
+ *
+ * All of them are offered. Unlike a fuel, a GWP set has no completeness
+ * condition to meet: the library holds five, the user picks one, and the one in
+ * use is named beside the result (CLAUDE.md rule 4).
+ */
+export const GWP_SETS: OfferedGwpSet[] = parameters.gwp_sets.map((set) => ({
+  id: set.id,
+  label: set.label,
+  fossilSplit: set.fossil_split,
+}));
+
+/**
+ * The set the total uses until the user chooses another.
+ *
+ * AR6 is the most recent assessment. Named by id rather than by position so
+ * that reordering the library cannot silently change which GWPs every default
+ * result is computed with; if the id ever disappears, the first set in the
+ * library is used instead of crashing, and the test suite fails.
+ */
+const PREFERRED_DEFAULT_GWP_SET_ID = 'gwp_ar6_100';
+
+export const DEFAULT_GWP_SET_ID: string =
+  GWP_SETS.find((set) => set.id === PREFERRED_DEFAULT_GWP_SET_ID)?.id ?? GWP_SETS[0].id;
+
 const UNIT_WORDS: Record<string, string> = {
   litre: 'the litre',
   m3: 'the cubic metre',

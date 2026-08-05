@@ -4,6 +4,7 @@
  * Pure functions only. Nothing here imports React, touches the DOM, or performs
  * I/O, so the engine is testable in a plain Node process.
  */
+export { toCarbonDioxideEquivalent } from './co2e';
 export { calculateFuelCombustion } from './combustion';
 export { EngineError, type EngineErrorCode } from './errors';
 export {
@@ -11,13 +12,17 @@ export {
   findCategoryLabel,
   findEmissionFactors,
   findFuel,
+  findGwpSet,
+  findGwpValues,
   findNetCalorificValue,
 } from './lookup';
 export {
+  combineAdditive,
   combineMultiplicative,
   evaluateCandidate,
   intervalToPercent,
   isAsymmetric,
+  type AdditiveCandidate,
   type UncertaintyCandidate,
 } from './uncertainty';
 export {

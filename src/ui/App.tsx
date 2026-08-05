@@ -11,15 +11,27 @@
 import { useMemo, useState } from 'react';
 import { parameters } from '../data';
 import type { CategoryCode } from '../data/types';
-import { calculateFuelCombustion, EngineError, GASES } from '../engine';
-import type { CombustionResult, GasEmission } from '../engine';
+import {
+  calculateFuelCombustion,
+  EngineError,
+  GASES,
+  toCarbonDioxideEquivalent,
+} from '../engine';
+import type {
+  CarbonDioxideEquivalentResult,
+  CombustionResult,
+  GasEmission,
+} from '../engine';
 import {
   CATEGORIES,
   conversionNote,
+  DEFAULT_GWP_SET_ID,
   findCategory,
   findOfferedFuel,
+  GWP_SETS,
   technologyOptions,
 } from './catalogue';
+import { Co2eTotal } from './Co2eTotal';
 import { formatQuantity } from './format';
 import { GasResult } from './GasResult';
 import { Working } from './Working';
@@ -36,8 +48,9 @@ type Outcome =
 /**
  * The gases to display, in the engine's gas order.
  *
- * Biomass CO2 is in `memoItems` and is left out unless the user asks for it.
- * Nothing is summed: the list is the total (CLAUDE.md rules 3 and 4).
+ * Biomass CO2 is in `memoItems` and is listed only when the user asks for it.
+ * Showing it here never puts it into the CO2-equivalent total: the engine keeps
+ * it out of `totalKg` whatever this component displays (CLAUDE.md rule 3).
  */
 function visibleGases(result: CombustionResult, includeBiomass: boolean): GasEmission[] {
   const shown = includeBiomass
@@ -52,6 +65,7 @@ export function App() {
   const [massText, setMassText] = useState('');
   const [technology, setTechnology] = useState<string | null>(null);
   const [includeBiomass, setIncludeBiomass] = useState(false);
+  const [gwpSetId, setGwpSetId] = useState(DEFAULT_GWP_SET_ID);
 
   const category = findCategory(categoryCode);
   const offered = findOfferedFuel(categoryCode, fuelId);
@@ -102,7 +116,17 @@ export function App() {
 
   const result = outcome.kind === 'result' ? outcome.result : null;
   const gases = result ? visibleGases(result, includeBiomass) : [];
-  const showingBiomass = result !== null && includeBiomass && result.memoItems.length > 0;
+
+  // The CO2-equivalent view is derived from the finished result, so switching
+  // GWP set re-totals without recalculating any gas (CLAUDE.md rule 4).
+  const co2e = useMemo<CarbonDioxideEquivalentResult | null>(
+    () => (result === null ? null : toCarbonDioxideEquivalent(result, gwpSetId)),
+    [result, gwpSetId],
+  );
+
+  // The gas figures and the total each carry their own caveats; the user reads
+  // one list, not two.
+  const caveats = [...(result?.gaps ?? []), ...(co2e?.gaps ?? [])];
 
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-6 sm:py-10">
@@ -256,27 +280,47 @@ export function App() {
           </div>
         )}
 
-        {result && (
+        {result && co2e && (
           <section>
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-              <h2 className="text-base font-semibold text-zinc-900">
-                {showingBiomass ? 'Total including biomass CO₂' : 'Total emissions'}
-              </h2>
+              <h2 className="sr-only">Result</h2>
               <p className="text-xs tabular-nums text-zinc-600">
                 {formatQuantity(result.massKg)} kg {result.fuelLabel} · {result.categoryCode}
               </p>
             </div>
 
-            {showingBiomass && (
-              <p className="mt-1.5 text-xs leading-relaxed text-zinc-700">
-                Not an IPCC inventory total — biomass CO₂ is excluded from national totals to avoid
-                double counting.
-              </p>
-            )}
+            <div className="mt-1.5">
+              <Co2eTotal result={co2e} />
+            </div>
 
+            <div className="mt-3">
+              <label htmlFor="gwp-set" className={LABEL}>
+                Global warming potentials
+              </label>
+              <select
+                id="gwp-set"
+                value={gwpSetId}
+                onChange={(event) => setGwpSetId(event.target.value)}
+                aria-describedby="gwp-set-note"
+                className="mt-1.5 block w-full border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+              >
+                {GWP_SETS.map((set) => (
+                  <option key={set.id} value={set.id}>
+                    {set.label}
+                  </option>
+                ))}
+              </select>
+              <p id="gwp-set-note" className="mt-1.5 text-xs leading-relaxed text-zinc-600">
+                The Guidelines do not publish these. Every set here comes from an IPCC assessment
+                report, and none has been checked against its primary table yet — which is why the
+                total carries an External mark and the gases below do not.
+              </p>
+            </div>
+
+            <h3 className="mt-6 text-base font-semibold text-zinc-900">The three gases</h3>
             <p className="mt-1.5 text-xs leading-relaxed text-zinc-600">
-              Three separate gases, not combined. Adding them together needs a global warming
-              potential set, which this version does not apply.
+              The primary result. Each gas is measured in its own mass, before any global warming
+              potential is applied.
             </p>
 
             {result.memoItems.length > 0 && (
@@ -288,9 +332,10 @@ export function App() {
                   className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
                 />
                 <span>
-                  Include biomass CO₂
+                  Show biomass CO₂
                   <span className="block text-xs text-zinc-600">
-                    Reported separately as a memo item. Off by default.
+                    A memo item, off by default. Listing it here does not add it to the total —
+                    biomass CO₂ is excluded from inventory totals to avoid double counting.
                   </span>
                 </span>
               </label>
@@ -310,13 +355,13 @@ export function App() {
               </p>
             )}
 
-            {result.gaps.length > 0 && (
+            {caveats.length > 0 && (
               <div className="mt-4 border border-zinc-300 p-3">
                 <h3 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-600">
                   Caveats
                 </h3>
                 <ul className="mt-1.5 space-y-1">
-                  {result.gaps.map((gap) => (
+                  {caveats.map((gap) => (
                     <li
                       key={`${gap.parameterId ?? gap.kind}-${gap.gas ?? ''}`}
                       className="text-xs leading-relaxed text-zinc-800"
@@ -328,7 +373,7 @@ export function App() {
               </div>
             )}
 
-            <Working result={result} gases={gases} />
+            <Working result={result} gases={gases} co2e={co2e} />
           </section>
         )}
       </div>

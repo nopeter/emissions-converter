@@ -35,4 +35,10 @@ export type EngineErrorCode =
   /** The parameter record exists but its value is null or not a finite number. */
   | 'null_parameter_value'
   /** The parameter is published in a unit the engine does not know how to apply. */
-  | 'unexpected_unit';
+  | 'unexpected_unit'
+  /** No GWP set with the given id exists in the parameter library. */
+  | 'unknown_gwp_set'
+  /** The GWP set publishes no value for a gas the result contains. */
+  | 'missing_gwp_value'
+  /** Several GWPs match a gas and the fuel does not say which one applies. */
+  | 'ambiguous_gwp_value';

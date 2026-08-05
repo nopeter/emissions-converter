@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0.0",
-  "library_version": "0.2.0",
+  "library_version": "0.2.1",
   "updated": "2026-08-05",
   "methodology": "2006 IPCC Guidelines for National Greenhouse Gas Inventories",
   "readme": "Every record carries a provenance class. 'ipcc' values were read directly from the cited table of the 2006 IPCC Guidelines. 'external' values come from outside the Guidelines and must name their own source. 'assumed' values are our own simplifications. Nothing in this file may be treated as verified unless verified is true.",
@@ -844,7 +844,7 @@
   "open_questions": [
     "Source fuel densities from a citable authority before enabling volume-based inputs.",
     "Verify all GWP values against the primary IPCC assessment reports, and replace each set's report-level source with the exact table reference (source_precision is currently report_level on every set).",
-    "Decide how the engine picks between the AR6 fossil and non-fossil methane GWPs, and how the UI explains that a firewood result changes when the GWP set changes.",
+    "Confirm with a reviewer that picking the AR6 methane GWP from the fuel's biomass flag is the right rule, now that the engine does so: biomass fuels get the non-fossil value, everything else the fossil one.",
     "Confirm IPCC/IGES copyright position on reproducing default factor tables in a commercial product.",
     "Decide whether charcoal and firewood bag presets are offered at all, given how much bag weights vary."
   ]

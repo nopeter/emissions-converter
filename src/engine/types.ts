@@ -6,10 +6,14 @@
  * applied. The audit trail is not debug output — it is the product. A number
  * without its provenance is not shippable (CLAUDE.md rule 1).
  */
-import type { CategoryCode, Gas, Provenance, Tier } from '../data/types';
+import type { CategoryCode, Gas, GwpOrigin, Provenance, Tier } from '../data/types';
 
 /** What part a parameter plays in the calculation. */
-export type ParameterRole = 'activity_data' | 'net_calorific_value' | 'emission_factor';
+export type ParameterRole =
+  | 'activity_data'
+  | 'net_calorific_value'
+  | 'emission_factor'
+  | 'global_warming_potential';
 
 /** Why an uncertainty term was left out of the Approach 1 combination. */
 export type UncertaintySkipReason =
@@ -176,6 +180,101 @@ export interface CombustionResult {
    */
   gaps: ParameterGap[];
   audit: CombustionAudit;
+}
+
+/**
+ * Which GWP was applied to one gas, and why that one rather than another.
+ *
+ * `originReason` matters for AR6, which publishes a higher 100-year methane GWP
+ * for fossil methane than for non-fossil methane. The engine picks by the fuel's
+ * biomass flag, and records the choice here so the user is told which of the two
+ * they are looking at rather than having to infer it.
+ */
+export interface GwpSelection {
+  setId: string;
+  setLabel: string;
+  horizonYears: number;
+  valueId: string;
+  valueLabel: string;
+  gas: Gas;
+  origin: GwpOrigin;
+  /** Dimensionless: kg CO2-eq per kg of gas. */
+  value: number;
+  originReason: string;
+}
+
+/** One gas restated in CO2-equivalent. */
+export interface GasCarbonDioxideEquivalent {
+  gas: Gas;
+  /** The gas figure this was derived from, in kg of the gas itself. */
+  kg: number;
+  gwp: GwpSelection;
+  co2eKg: number;
+  /** True when this figure is reported separately and excluded from the total. */
+  memoItem: boolean;
+  memoReason: string | null;
+  /**
+   * The gas's own combined uncertainty, carried through unchanged. Multiplying
+   * by a GWP would add a term under Eq 3.1, but no GWP in the library publishes
+   * a confidence interval, so there is no term to add — the omission is recorded
+   * in the result's `uncertainty.skipped` rather than treated as exact.
+   */
+  uncertaintyPercent: number | null;
+  audit: {
+    equation: string;
+    workings: string;
+    gwp: FactorAudit;
+  };
+}
+
+/** The GWP set a CO2-equivalent view was computed with, as it was used. */
+export interface GwpSetAudit {
+  id: string;
+  label: string;
+  horizonYears: number;
+  fossilSplit: boolean;
+  provenance: Provenance;
+  source: string | null;
+  /** How precisely `source` locates the figures, when the library says. */
+  sourcePrecision: string | null;
+  verified: boolean;
+  note: string | null;
+}
+
+/** How a CO2-equivalent total was arrived at. */
+export interface CarbonDioxideEquivalentAudit {
+  /** What CO2-equivalent means, written out. Not an IPCC equation: see `libraryNote`. */
+  definition: string;
+  /** Vol 1 Ch 3 Eq 3.2, quoted from the parameter library. */
+  additionEquation: string;
+  /** The sum with this calculation's numbers substituted in. */
+  workings: string;
+  /** The library's record of why no GWP set can be IPCC-derived. */
+  libraryNote: string;
+}
+
+/**
+ * CO2, CH4 and N2O restated in CO2-equivalent and summed.
+ *
+ * A derived view over a `CombustionResult`, never a replacement for it: the
+ * separate gas figures remain the primary result (CLAUDE.md rule 4). Biomass CO2
+ * is in `memoItems` and is absent from `totalKg` (rule 3) — a CO2-equivalent
+ * total does not change what belongs in a total.
+ */
+export interface CarbonDioxideEquivalentResult {
+  gwpSet: GwpSetAudit;
+  /** Gases that count towards `totalKg`. */
+  contributing: GasCarbonDioxideEquivalent[];
+  /** Gases reported separately and excluded from `totalKg`. */
+  memoItems: GasCarbonDioxideEquivalent[];
+  /** The headline figure, in kg CO2-eq. Excludes everything in `memoItems`. */
+  totalKg: number;
+  /** The memo items summed, in kg CO2-eq. Reported beside the total, never in it. */
+  memoTotalKg: number;
+  /** Combined by Eq 3.2, because the total is a sum. */
+  uncertainty: UncertaintyResult;
+  gaps: ParameterGap[];
+  audit: CarbonDioxideEquivalentAudit;
 }
 
 /** Options that select between parameters, rather than supplying them. */

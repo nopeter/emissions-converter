@@ -10,7 +10,7 @@
  * is the wrong precision for a headline figure, which is why this exists
  * separately rather than reusing it.
  */
-import type { Gas, Provenance } from '../data/types';
+import type { Gas, GwpOrigin, Provenance } from '../data/types';
 import type { ParameterRole } from '../engine';
 
 const QUANTITY = new Intl.NumberFormat('en-GB', { maximumSignificantDigits: 4 });
@@ -51,4 +51,12 @@ export const ROLE_LABEL: Record<ParameterRole, string> = {
   activity_data: 'Activity data',
   net_calorific_value: 'Net calorific value',
   emission_factor: 'Emission factor',
+  global_warming_potential: 'Global warming potential',
+};
+
+/** How a GWP set's methane origin reads in a label. */
+export const GWP_ORIGIN_LABEL: Record<GwpOrigin, string> = {
+  all: 'all sources',
+  fossil: 'fossil',
+  non_fossil: 'non-fossil',
 };

@@ -10,6 +10,8 @@ import type {
   EmissionFactor,
   Fuel,
   Gas,
+  GwpSet,
+  GwpValue,
   NetCalorificValue,
   ParameterLibrary,
 } from '../data/types';
@@ -67,4 +69,20 @@ export function findEmissionFactors(
   }
 
   return technologySpecific.filter((factor) => factor.vehicle_technology === vehicleTechnology);
+}
+
+export function findGwpSet(library: ParameterLibrary, setId: string): GwpSet | undefined {
+  return library.gwp_sets.find((set) => set.id === setId);
+}
+
+/**
+ * Every GWP a set publishes for one gas.
+ *
+ * A list for the same reason `findEmissionFactors` returns one: AR6 publishes
+ * two 100-year methane GWPs, one for fossil and one for non-fossil methane, and
+ * silently taking the first would pick between them by file order. Which one
+ * applies depends on the fuel, so the caller decides.
+ */
+export function findGwpValues(set: GwpSet, gas: Gas): GwpValue[] {
+  return set.values.filter((value) => value.gas === gas);
 }

@@ -10,6 +10,13 @@ Two version numbers are tracked:
 - `schema_version` — the shape of the file. Bumped when a consumer would have to
   change to read it.
 
+## library 0.2.1 — schema 2.0.0 — 2026-08-05
+
+No parameter value changed. The open question about how the engine should choose
+between the AR6 fossil and non-fossil methane GWPs is answered — it picks by the
+fuel's biomass flag — so the entry now asks a reviewer to confirm that rule
+rather than to decide it.
+
 ## library 0.2.0 — schema 2.0.0 — 2026-08-05
 
 ### Global warming potential sets
