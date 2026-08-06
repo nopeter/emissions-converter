@@ -1,7 +1,7 @@
 {
-  "schema_version": "1.0.0",
-  "library_version": "0.1.0",
-  "updated": "2026-08-02",
+  "schema_version": "2.0.0",
+  "library_version": "0.2.1",
+  "updated": "2026-08-05",
   "methodology": "2006 IPCC Guidelines for National Greenhouse Gas Inventories",
   "readme": "Every record carries a provenance class. 'ipcc' values were read directly from the cited table of the 2006 IPCC Guidelines. 'external' values come from outside the Guidelines and must name their own source. 'assumed' values are our own simplifications. Nothing in this file may be treated as verified unless verified is true.",
 
@@ -654,45 +654,197 @@
     }
   ],
 
+  "gwp_sets_note": "The 2006 IPCC Guidelines do not publish global warming potential values, so no GWP set in this library may ever be classed 'ipcc'. Vol 1 Ch 4 footnote 3 records that the Guidelines used the Second Assessment Report 100-year GWPs to derive their own key category thresholds and worked examples; that is a statement about the Guidelines' internal arithmetic, not a published GWP table. Vol 1 Ch 8 Annex 2 goes the other way and makes the gap explicit: its reporting tables require the inventory compiler to specify the source of the GWP factors used. Both point at the same conclusion — the choice of GWP set belongs to whoever compiles the inventory, and must be named alongside any CO2-equivalent figure this calculator shows.",
+
   "gwp_sets": [
     {
-      "id": "gwp_ar4_100",
-      "label": "IPCC Fourth Assessment Report, 100-year",
+      "id": "gwp_sar_100",
+      "label": "IPCC Second Assessment Report (SAR), 100-year",
       "horizon_years": 100,
-      "values": { "CO2": 1, "CH4": 25, "N2O": 298 },
+      "fossil_split": false,
+      "values": [
+        {
+          "id": "gwp_sar_100_co2",
+          "gas": "CO2",
+          "origin": "all",
+          "label": "Carbon dioxide",
+          "value": 1
+        },
+        {
+          "id": "gwp_sar_100_ch4",
+          "gas": "CH4",
+          "origin": "all",
+          "label": "Methane",
+          "value": 21
+        },
+        {
+          "id": "gwp_sar_100_n2o",
+          "gas": "N2O",
+          "origin": "all",
+          "label": "Nitrous oxide",
+          "value": 310
+        }
+      ],
       "provenance": "external",
-      "source": "IPCC Fourth Assessment Report (2007)",
+      "source": "IPCC Second Assessment Report (1995)",
+      "source_precision": "report_level",
       "verified": false,
       "status": "needs_primary_verification",
-      "note": "The 2006 IPCC Guidelines reference GWP values from the Third Assessment Report but do not publish a GWP table. Every GWP set is therefore external to the methodology. Verify each figure against the primary assessment report before launch."
+      "note": "The 2006 IPCC Guidelines do not publish GWP values; this set is external to the methodology. Vol 1 Ch 4 footnote 3 states that the Guidelines used the SAR 100-year GWPs when deriving their own key category thresholds and worked examples, which makes this set the one internally consistent with the Guidelines' own arithmetic. Vol 1 Ch 8 Annex 2 nonetheless requires the compiler to specify the source of the GWP factors used. Source is named at report level only: the exact table reference is not yet confirmed."
+    },
+    {
+      "id": "gwp_tar_100",
+      "label": "IPCC Third Assessment Report (TAR), 100-year",
+      "horizon_years": 100,
+      "fossil_split": false,
+      "values": [
+        {
+          "id": "gwp_tar_100_co2",
+          "gas": "CO2",
+          "origin": "all",
+          "label": "Carbon dioxide",
+          "value": 1
+        },
+        {
+          "id": "gwp_tar_100_ch4",
+          "gas": "CH4",
+          "origin": "all",
+          "label": "Methane",
+          "value": 23
+        },
+        {
+          "id": "gwp_tar_100_n2o",
+          "gas": "N2O",
+          "origin": "all",
+          "label": "Nitrous oxide",
+          "value": 296
+        }
+      ],
+      "provenance": "external",
+      "source": "IPCC Third Assessment Report (2001)",
+      "source_precision": "report_level",
+      "verified": false,
+      "status": "needs_primary_verification",
+      "note": "The 2006 IPCC Guidelines do not publish GWP values; this set is external to the methodology. The Guidelines reference TAR GWPs in places, but Vol 1 Ch 4 footnote 3 records that their own key category thresholds and worked examples used the SAR 100-year values, and Vol 1 Ch 8 Annex 2 requires the compiler to specify which source was used. Source is named at report level only: the exact table reference is not yet confirmed."
+    },
+    {
+      "id": "gwp_ar4_100",
+      "label": "IPCC Fourth Assessment Report (AR4), 100-year",
+      "horizon_years": 100,
+      "fossil_split": false,
+      "values": [
+        {
+          "id": "gwp_ar4_100_co2",
+          "gas": "CO2",
+          "origin": "all",
+          "label": "Carbon dioxide",
+          "value": 1
+        },
+        {
+          "id": "gwp_ar4_100_ch4",
+          "gas": "CH4",
+          "origin": "all",
+          "label": "Methane",
+          "value": 25
+        },
+        {
+          "id": "gwp_ar4_100_n2o",
+          "gas": "N2O",
+          "origin": "all",
+          "label": "Nitrous oxide",
+          "value": 298
+        }
+      ],
+      "provenance": "external",
+      "source": "IPCC Fourth Assessment Report (2007)",
+      "source_precision": "report_level",
+      "verified": false,
+      "status": "needs_primary_verification",
+      "note": "The 2006 IPCC Guidelines do not publish GWP values; this set is external to the methodology. Vol 1 Ch 4 footnote 3 records that the Guidelines used the SAR 100-year GWPs for their own key category thresholds and worked examples, and Vol 1 Ch 8 Annex 2 requires the compiler to specify the source of the GWP factors used. Source is named at report level only: the exact table reference is not yet confirmed."
     },
     {
       "id": "gwp_ar5_100",
-      "label": "IPCC Fifth Assessment Report, 100-year",
+      "label": "IPCC Fifth Assessment Report (AR5), 100-year",
       "horizon_years": 100,
-      "values": { "CO2": 1, "CH4": 28, "N2O": 265 },
+      "fossil_split": false,
+      "values": [
+        {
+          "id": "gwp_ar5_100_co2",
+          "gas": "CO2",
+          "origin": "all",
+          "label": "Carbon dioxide",
+          "value": 1
+        },
+        {
+          "id": "gwp_ar5_100_ch4",
+          "gas": "CH4",
+          "origin": "all",
+          "label": "Methane",
+          "value": 28
+        },
+        {
+          "id": "gwp_ar5_100_n2o",
+          "gas": "N2O",
+          "origin": "all",
+          "label": "Nitrous oxide",
+          "value": 265
+        }
+      ],
       "provenance": "external",
       "source": "IPCC Fifth Assessment Report (2013)",
+      "source_precision": "report_level",
       "verified": false,
       "status": "needs_primary_verification",
-      "note": "CH4 value excludes climate-carbon feedbacks. Verify against the primary source."
+      "note": "The 2006 IPCC Guidelines do not publish GWP values; this set is external to the methodology. Vol 1 Ch 4 footnote 3 records that the Guidelines used the SAR 100-year GWPs for their own key category thresholds and worked examples, and Vol 1 Ch 8 Annex 2 requires the compiler to specify the source of the GWP factors used. AR5 publishes methane GWPs both with and without climate-carbon feedbacks; the figure recorded here is taken to be the value without feedbacks, which is the one used for inventory reporting. Source is named at report level only: the exact table reference is not yet confirmed, and the feedback treatment must be confirmed with it."
     },
     {
       "id": "gwp_ar6_100",
-      "label": "IPCC Sixth Assessment Report, 100-year",
+      "label": "IPCC Sixth Assessment Report (AR6), 100-year",
       "horizon_years": 100,
-      "values": { "CO2": 1, "CH4": 27.9, "N2O": 273 },
+      "fossil_split": true,
+      "values": [
+        {
+          "id": "gwp_ar6_100_co2",
+          "gas": "CO2",
+          "origin": "all",
+          "label": "Carbon dioxide",
+          "value": 1
+        },
+        {
+          "id": "gwp_ar6_100_ch4_fossil",
+          "gas": "CH4",
+          "origin": "fossil",
+          "label": "Methane, fossil origin",
+          "value": 29.8
+        },
+        {
+          "id": "gwp_ar6_100_ch4_non_fossil",
+          "gas": "CH4",
+          "origin": "non_fossil",
+          "label": "Methane, non-fossil origin",
+          "value": 27.0
+        },
+        {
+          "id": "gwp_ar6_100_n2o",
+          "gas": "N2O",
+          "origin": "all",
+          "label": "Nitrous oxide",
+          "value": 273
+        }
+      ],
       "provenance": "external",
       "source": "IPCC Sixth Assessment Report (2021)",
+      "source_precision": "report_level",
       "verified": false,
       "status": "needs_primary_verification",
-      "note": "AR6 distinguishes fossil and non-fossil methane. The value here needs checking against the primary table, and the fossil/non-fossil distinction may need to be modelled explicitly."
+      "note": "The 2006 IPCC Guidelines do not publish GWP values; this set is external to the methodology. Vol 1 Ch 4 footnote 3 records that the Guidelines used the SAR 100-year GWPs for their own key category thresholds and worked examples, and Vol 1 Ch 8 Annex 2 requires the compiler to specify the source of the GWP factors used. AR6 gives two 100-year methane GWPs, a higher one for fossil methane and a lower one for non-fossil methane, so this set carries both rather than an average; fossil_split is true and any consumer must choose by the origin of the fuel burned, which matters directly here because charcoal and firewood are non-fossil. Source is named at report level only: the exact table reference is not yet confirmed."
     }
   ],
 
   "open_questions": [
     "Source fuel densities from a citable authority before enabling volume-based inputs.",
-    "Verify all GWP values against the primary IPCC assessment reports.",
+    "Verify all GWP values against the primary IPCC assessment reports, and replace each set's report-level source with the exact table reference (source_precision is currently report_level on every set).",
+    "Confirm with a reviewer that picking the AR6 methane GWP from the fuel's biomass flag is the right rule, now that the engine does so: biomass fuels get the non-fossil value, everything else the fossil one.",
     "Confirm IPCC/IGES copyright position on reproducing default factor tables in a commercial product.",
     "Decide whether charcoal and firewood bag presets are offered at all, given how much bag weights vary."
   ]

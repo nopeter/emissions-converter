@@ -15,7 +15,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parameters } from '../../data';
-import type { CategoryCode } from '../../data/types';
+import type { CategoryCode, Gas } from '../../data/types';
 import { calculateFuelCombustion } from '../combustion';
 import { findEmissionFactors, findNetCalorificValue, GASES } from '../lookup';
 import { EXPECTED_EMISSION_FACTOR_UNIT, EXPECTED_NCV_UNIT } from '../units';
@@ -292,5 +292,99 @@ describe('provenance is declared everywhere', () => {
         expect(density.verified).toBe(false);
       }
     }
+  });
+});
+
+describe('every GWP set is well formed', () => {
+  const gwpValues = (setId: string, gas: Gas) => {
+    const set = parameters.gwp_sets.find((candidate) => candidate.id === setId);
+    return (set?.values ?? []).filter((value) => value.gas === gas);
+  };
+
+  it('publishes GWP sets to check', () => {
+    expect(parameters.gwp_sets.length).toBeGreaterThan(0);
+  });
+
+  it.each(parameters.gwp_sets.map((set) => set.id))('%s defines CO2 as exactly 1', (setId) => {
+    // CO2-equivalent is expressed in CO2, so CO2 is 1 by definition of the
+    // unit, in every set and every horizon. A set that says otherwise is
+    // mistranscribed, and every headline total computed from it would be wrong.
+    const co2 = gwpValues(setId, 'CO2');
+    expect(co2).toHaveLength(1);
+    expect(co2[0]?.value).toBe(1);
+  });
+
+  it.each(parameters.gwp_sets.map((set) => set.id))('%s covers all three gases', (setId) => {
+    for (const gas of GASES) {
+      expect(gwpValues(setId, gas).length).toBeGreaterThan(0);
+    }
+  });
+
+  it.each(parameters.gwp_sets.map((set) => set.id))(
+    '%s splits methane by origin if and only if it says it does',
+    (setId) => {
+      // AR6 publishes a higher 100-year GWP for fossil methane than for
+      // non-fossil methane. A set that claims the split must actually carry both
+      // values, or a consumer choosing by fuel origin would silently find
+      // nothing; a set that does not claim it must carry exactly one, or a
+      // consumer would silently pick whichever came first in the file.
+      const set = parameters.gwp_sets.find((candidate) => candidate.id === setId);
+      const methane = gwpValues(setId, 'CH4');
+      const origins = methane.map((value) => value.origin).sort();
+
+      if (set?.fossil_split === true) {
+        expect(
+          origins,
+          `${setId}: fossil_split is true, so it needs one fossil and one non-fossil CH4 value`,
+        ).toEqual(['fossil', 'non_fossil']);
+      } else {
+        expect(
+          methane,
+          `${setId}: fossil_split is false, so it needs exactly one CH4 value`,
+        ).toHaveLength(1);
+        expect(methane[0]?.origin).toBe('all');
+      }
+    },
+  );
+
+  it('declares fossil_split on every set', () => {
+    // Absent must not be readable as false. The flag decides whether a consumer
+    // has to ask about fuel origin at all.
+    for (const set of parameters.gwp_sets) {
+      expect(typeof set.fossil_split).toBe('boolean');
+    }
+  });
+
+  it('carries a finite positive value on every GWP', () => {
+    for (const set of parameters.gwp_sets) {
+      for (const value of set.values) {
+        expect(Number.isFinite(value.value)).toBe(true);
+        expect(value.value).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('gives every GWP set and value a unique id', () => {
+    const setIds = parameters.gwp_sets.map((set) => set.id);
+    expect(new Set(setIds).size).toBe(setIds.length);
+
+    const valueIds = parameters.gwp_sets.flatMap((set) => set.values.map((value) => value.id));
+    expect(new Set(valueIds).size).toBe(valueIds.length);
+  });
+
+  it('names a source and a note on every set, and is not marked verified', () => {
+    // The sources name a report and a year but not yet a table, so nothing here
+    // has been checked against a primary source.
+    for (const set of parameters.gwp_sets) {
+      expect(set.source).toBeTruthy();
+      expect(set.note).toBeTruthy();
+      if (set.source_precision === 'report_level') {
+        expect(set.verified).toBe(false);
+      }
+    }
+  });
+
+  it('records at library level that the Guidelines publish no GWP table', () => {
+    expect(parameters.gwp_sets_note).toBeTruthy();
   });
 });

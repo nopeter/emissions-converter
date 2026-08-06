@@ -11,8 +11,14 @@
  * keyboard without any handling of our own.
  */
 import type { ReactNode } from 'react';
-import type { CombustionResult, FactorAudit, GasEmission, UncertaintyResult } from '../engine';
-import { formatPercent, formatQuantity, GAS_FORMULA, ROLE_LABEL } from './format';
+import type {
+  CarbonDioxideEquivalentResult,
+  CombustionResult,
+  FactorAudit,
+  GasEmission,
+  UncertaintyResult,
+} from '../engine';
+import { formatPercent, formatQuantity, GAS_FORMULA, GWP_ORIGIN_LABEL, ROLE_LABEL } from './format';
 import { ProvenanceChip } from './ProvenanceChip';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
@@ -174,7 +180,108 @@ function GasWorking({ emission }: { emission: GasEmission }) {
   );
 }
 
-export function Working({ result, gases }: { result: CombustionResult; gases: GasEmission[] }) {
+/**
+ * How the CO2-equivalent total was reached.
+ *
+ * Every gas is shown with the GWP applied to it and why that GWP rather than
+ * another, because for AR6 "why that one" is a real question with two possible
+ * answers. The memo item appears here too, with its own arithmetic, so that a
+ * reader can see it was computed and then deliberately left out of the sum
+ * rather than never computed at all.
+ */
+function Co2eWorking({ co2e }: { co2e: CarbonDioxideEquivalentResult }) {
+  const entries = [...co2e.contributing, ...co2e.memoItems];
+
+  return (
+    <div className="mt-5 border-t border-zinc-200 pt-4">
+      <h4 className="text-sm font-semibold text-zinc-900">CO₂-equivalent</h4>
+
+      <div className="mt-2">
+        <Verbatim>{co2e.audit.definition}</Verbatim>
+      </div>
+
+      <Section title="Global warming potential set">
+        <dl>
+          <Field label="Set" value={co2e.gwpSet.label} />
+          <Field label="Parameter" value={co2e.gwpSet.id} />
+          <Field label="Horizon" value={`${formatQuantity(co2e.gwpSet.horizonYears)} years`} />
+          <Field
+            label="Splits methane by origin"
+            value={co2e.gwpSet.fossilSplit ? 'Yes — fossil and non-fossil' : 'No — one value'}
+          />
+          <Field
+            label="Checked against source"
+            value={co2e.gwpSet.verified ? 'Yes' : 'No — not yet verified'}
+          />
+          <Field
+            label="Source precision"
+            value={
+              co2e.gwpSet.sourcePrecision === 'report_level'
+                ? 'Report named, exact table not yet confirmed'
+                : (co2e.gwpSet.sourcePrecision ?? 'Not recorded')
+            }
+          />
+        </dl>
+
+        <p className="mt-2 text-[11px] leading-relaxed text-zinc-700">
+          <span className="text-zinc-600">Source: </span>
+          {co2e.gwpSet.source ?? 'No source recorded on this set.'}
+        </p>
+
+        <p className="mt-2 border-l-2 border-zinc-300 pl-2.5 text-[11px] leading-relaxed text-zinc-700">
+          {co2e.audit.libraryNote}
+        </p>
+      </Section>
+
+      <Section title="Each gas">
+        {entries.map((entry) => (
+          <div key={entry.gas} className="mt-3 first:mt-0">
+            <p className="text-xs font-semibold text-zinc-900">
+              {GAS_FORMULA[entry.gas]}
+              {entry.memoItem && (
+                <span className="ml-2 font-normal text-zinc-600">memo item — not in the total</span>
+              )}
+            </p>
+            <p className="mt-1 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs tabular-nums text-zinc-900">
+              {entry.audit.workings}
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-zinc-700">
+              {entry.gwp.originReason}
+              {entry.gwp.origin !== 'all' && ` Applies to ${GWP_ORIGIN_LABEL[entry.gwp.origin]} sources.`}
+            </p>
+            <Factor factor={entry.audit.gwp} />
+          </div>
+        ))}
+      </Section>
+
+      <Section title="Total">
+        <p className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs tabular-nums text-zinc-900">
+          {co2e.audit.workings}
+        </p>
+        {co2e.memoItems.length > 0 && (
+          <p className="mt-2 border-l-2 border-zinc-300 pl-2.5 text-[11px] leading-relaxed text-zinc-700">
+            Biomass CO₂ ({formatQuantity(co2e.memoTotalKg)} kg CO₂-eq) is absent from this sum by
+            design, not by omission.
+          </p>
+        )}
+      </Section>
+
+      <Section title="Uncertainty of the total">
+        <Uncertainty uncertainty={co2e.uncertainty} />
+      </Section>
+    </div>
+  );
+}
+
+export function Working({
+  result,
+  gases,
+  co2e,
+}: {
+  result: CombustionResult;
+  gases: GasEmission[];
+  co2e: CarbonDioxideEquivalentResult | null;
+}) {
   const { audit } = result;
 
   return (
@@ -214,6 +321,8 @@ export function Working({ result, gases }: { result: CombustionResult; gases: Ga
         {gases.map((emission) => (
           <GasWorking key={emission.gas} emission={emission} />
         ))}
+
+        {co2e && <Co2eWorking co2e={co2e} />}
 
         <Section title="Parameter library">
           <dl>

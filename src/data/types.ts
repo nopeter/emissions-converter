@@ -121,16 +121,56 @@ export interface Density extends ProvenancedRecord {
 }
 
 /**
+ * Which emissions a single GWP value applies to.
+ *
+ * `all` is the normal case: one value covers every source of that gas. AR6 is
+ * the exception — it publishes a higher 100-year GWP for fossil methane than
+ * for non-fossil methane, so its CH4 is carried as two records, `fossil` and
+ * `non_fossil`. That distinction is not cosmetic here: charcoal and firewood
+ * are non-fossil, so it changes their CO2-equivalent figure.
+ */
+export type GwpOrigin = 'all' | 'fossil' | 'non_fossil';
+
+/**
+ * One global warming potential, for one gas, from one assessment report.
+ *
+ * Named rather than anonymous — every value has its own id and label — so that
+ * a set can carry more than one value for a gas without the extra value being
+ * an unlabelled special case.
+ */
+export interface GwpValue {
+  id: string;
+  gas: Gas;
+  origin: GwpOrigin;
+  label: string;
+  /** Dimensionless: kg CO2-eq per kg of gas, over the set's horizon. */
+  value: number;
+}
+
+/**
  * A named set of global warming potentials.
  *
  * Present in the library but not used by the engine yet: no CO2-equivalent
  * calculation exists in this change. GWPs are always `external`, because the
- * 2006 Guidelines reference GWP values but do not publish a table.
+ * 2006 Guidelines do not publish a GWP table (see `gwp_sets_note`); a set
+ * claiming `ipcc` provenance is a bug, and the data-integrity tests fail on it.
  */
 export interface GwpSet extends ProvenancedRecord {
   label: string;
   horizon_years: number;
-  values: Record<Gas, number>;
+  /**
+   * True when the set splits methane by fossil versus non-fossil origin, in
+   * which case `values` holds exactly one `fossil` and one `non_fossil` CH4
+   * record. False when a single `all` CH4 record covers both.
+   */
+  fossil_split: boolean;
+  values: GwpValue[];
+  /**
+   * How precisely `source` locates the figures. `report_level` means the source
+   * names the assessment report but the exact table has not been confirmed, so
+   * the set cannot be marked verified.
+   */
+  source_precision?: 'report_level' | 'table_level';
   status?: string;
 }
 
@@ -155,6 +195,11 @@ export interface ParameterLibrary {
   fuels: Fuel[];
   emission_factors: EmissionFactor[];
   densities: Density[];
+  /**
+   * Why every GWP set is `external`, with the citations. Library-level because
+   * it is a fact about the 2006 Guidelines, not about any one set.
+   */
+  gwp_sets_note: string;
   gwp_sets: GwpSet[];
   open_questions: string[];
 }
