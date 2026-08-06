@@ -26,6 +26,18 @@ export type EngineErrorCode =
   | 'unknown_category'
   /** The mass was not a finite, non-negative number of kilograms. */
   | 'invalid_mass'
+  /** The entered quantity was not a finite, non-negative number. */
+  | 'invalid_quantity'
+  /** No unit with the given id exists in the parameter library. */
+  | 'unknown_unit'
+  /** A volume was entered and no density was supplied to convert it by. */
+  | 'missing_density'
+  /** A density was supplied but is not a positive, finite number. */
+  | 'invalid_density'
+  /** An energy figure was entered without saying whether it is net or gross. */
+  | 'missing_calorific_basis'
+  /** A gross energy figure was entered for a fuel with no published rule. */
+  | 'missing_calorific_basis_conversion'
   /** The fuel exists but the library publishes no net calorific value for it. */
   | 'missing_calorific_value'
   /** No emission factor is published for this fuel, category and gas. */

@@ -10,38 +10,51 @@
  */
 import { useMemo, useState } from 'react';
 import { parameters } from '../data';
-import type { CategoryCode } from '../data/types';
+import type { CategoryCode, Fuel } from '../data/types';
 import {
-  calculateFuelCombustion,
+  calculateFuelCombustionFromQuantity,
   EngineError,
   GASES,
   toCarbonDioxideEquivalent,
 } from '../engine';
 import type {
+  CalorificBasis,
   CarbonDioxideEquivalentResult,
   CombustionResult,
+  FuelQuantity,
   GasEmission,
 } from '../engine';
 import {
   CATEGORIES,
-  conversionNote,
   DEFAULT_GWP_SET_ID,
+  defaultUnitForFuel,
+  densityUnitsForFuel,
   findCategory,
   findOfferedFuel,
+  findUnitById,
   GWP_SETS,
+  presetsForUnit,
   technologyOptions,
+  unitGroupsForFuel,
 } from './catalogue';
 import { Co2eTotal } from './Co2eTotal';
-import { formatQuantity } from './format';
+import { CALORIFIC_BASIS_LABEL, formatQuantity } from './format';
 import { GasResult } from './GasResult';
+import { ProvenanceChip } from './ProvenanceChip';
 import { Working } from './Working';
 
 const LABEL = 'text-[11px] font-semibold uppercase tracking-wider text-zinc-600';
+const FIELD = 'block w-full border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900';
 const FIRST = CATEGORIES[0];
+
+/** The two answers about a heating value, in the order a bill tends to use. */
+const CALORIFIC_BASES: CalorificBasis[] = ['net', 'gross'];
 
 type Outcome =
   | { kind: 'empty' }
   | { kind: 'needs_technology' }
+  | { kind: 'needs_density' }
+  | { kind: 'needs_calorific_basis' }
   | { kind: 'error'; message: string }
   | { kind: 'result'; result: CombustionResult };
 
@@ -62,7 +75,13 @@ function visibleGases(result: CombustionResult, includeBiomass: boolean): GasEmi
 export function App() {
   const [categoryCode, setCategoryCode] = useState<CategoryCode>(FIRST.code);
   const [fuelId, setFuelId] = useState(FIRST.fuels[0].id);
-  const [massText, setMassText] = useState('');
+  const [quantityText, setQuantityText] = useState('');
+  const [unitId, setUnitId] = useState(defaultUnitForFuel(FIRST.fuels[0].fuel).id);
+  const [densityText, setDensityText] = useState('');
+  const [densityUnitId, setDensityUnitId] = useState(
+    densityUnitsForFuel(FIRST.fuels[0].fuel)[0].id,
+  );
+  const [calorificBasis, setCalorificBasis] = useState<CalorificBasis | null>(null);
   const [technology, setTechnology] = useState<string | null>(null);
   const [includeBiomass, setIncludeBiomass] = useState(false);
   const [gwpSetId, setGwpSetId] = useState(DEFAULT_GWP_SET_ID);
@@ -70,36 +89,67 @@ export function App() {
   const category = findCategory(categoryCode);
   const offered = findOfferedFuel(categoryCode, fuelId);
   const technologies = technologyOptions(fuelId, categoryCode);
-  const note = offered ? conversionNote(offered.fuel) : null;
+
+  const unit = findUnitById(unitId);
+  const unitGroups = offered ? unitGroupsForFuel(offered.fuel) : [];
+  const densityChoices = offered ? densityUnitsForFuel(offered.fuel) : [];
+  const presets = offered ? presetsForUnit(offered.fuel, unitId) : [];
+  // A preset is only "in force" while the figure it filled in is still there.
+  // Once the user edits the kilograms, the assumption of a full cylinder is
+  // theirs to have overridden, and the chip stops claiming otherwise.
+  const activePreset = presets.find((preset) => Number(quantityText) === preset.quantity);
+
+  const needsTechnology = technologies.length > 0;
+  const needsDensity = unit?.measures === 'volume';
+  const needsCalorificBasis = unit?.measures === 'energy';
 
   function selectCategory(code: CategoryCode) {
     setCategoryCode(code);
     setTechnology(null);
     const next = findCategory(code);
     if (next && !next.fuels.some((fuel) => fuel.id === fuelId)) {
-      setFuelId(next.fuels[0].id);
+      selectFuel(next.fuels[0].fuel);
     }
   }
 
-  function selectFuel(id: string) {
-    setFuelId(id);
+  function selectFuel(fuel: Fuel) {
+    setFuelId(fuel.id);
     setTechnology(null);
+    // Each fuel is preselected in the unit it is actually sold in, and the
+    // answers that belong to the old unit are cleared rather than carried over:
+    // a density given for kerosene means nothing once the fuel is natural gas.
+    setUnitId(defaultUnitForFuel(fuel).id);
+    setDensityUnitId(densityUnitsForFuel(fuel)[0].id);
+    setDensityText('');
+    setCalorificBasis(null);
   }
 
-  const needsTechnology = technologies.length > 0;
-
   const outcome = useMemo<Outcome>(() => {
-    const entered = massText.trim();
+    const entered = quantityText.trim();
     if (entered === '') {
       return { kind: 'empty' };
     }
     if (needsTechnology && technology === null) {
       return { kind: 'needs_technology' };
     }
+    if (needsDensity && densityText.trim() === '') {
+      return { kind: 'needs_density' };
+    }
+    if (needsCalorificBasis && calorificBasis === null) {
+      return { kind: 'needs_calorific_basis' };
+    }
+
+    const quantity: FuelQuantity = {
+      quantity: Number(entered),
+      unit: unitId,
+      ...(needsDensity ? { density: { value: Number(densityText), unit: densityUnitId } } : {}),
+      ...(needsCalorificBasis && calorificBasis !== null ? { calorificBasis } : {}),
+    };
+
     try {
-      const result = calculateFuelCombustion(
+      const result = calculateFuelCombustionFromQuantity(
         fuelId,
-        Number(entered),
+        quantity,
         categoryCode,
         technology === null ? {} : { vehicleTechnology: technology },
       );
@@ -112,7 +162,19 @@ export function App() {
       }
       throw error;
     }
-  }, [categoryCode, fuelId, massText, needsTechnology, technology]);
+  }, [
+    calorificBasis,
+    categoryCode,
+    densityText,
+    densityUnitId,
+    fuelId,
+    needsCalorificBasis,
+    needsDensity,
+    needsTechnology,
+    quantityText,
+    technology,
+    unitId,
+  ]);
 
   const result = outcome.kind === 'result' ? outcome.result : null;
   const gases = result ? visibleGases(result, includeBiomass) : [];
@@ -131,8 +193,8 @@ export function App() {
   return (
     <main className="mx-auto w-full max-w-lg px-4 py-6 sm:py-10">
       <h1 className="text-sm font-normal leading-relaxed text-zinc-700">
-        Converts a mass of fuel burned into carbon dioxide, methane and nitrous oxide, using the
-        2006 IPCC Guidelines.
+        Converts fuel you burned — by weight, by volume or by energy — into carbon dioxide, methane
+        and nitrous oxide, using the 2006 IPCC Guidelines.
       </h1>
 
       <form className="mt-6 space-y-5" onSubmit={(event) => event.preventDefault()}>
@@ -173,8 +235,13 @@ export function App() {
           <select
             id="fuel"
             value={fuelId}
-            onChange={(event) => selectFuel(event.target.value)}
-            className="mt-1.5 block w-full border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900"
+            onChange={(event) => {
+              const next = category?.fuels.find((fuel) => fuel.id === event.target.value);
+              if (next) {
+                selectFuel(next.fuel);
+              }
+            }}
+            className={`mt-1.5 ${FIELD}`}
           >
             {category?.fuels.map((fuel) => (
               <option key={fuel.id} value={fuel.id}>
@@ -185,40 +252,183 @@ export function App() {
         </div>
 
         <div>
-          <label htmlFor="mass" className={LABEL}>
-            Mass burned
-            <span className="sr-only"> in kilograms</span>
-          </label>
-          <div className="mt-1.5 flex items-baseline gap-2">
-            <input
-              id="mass"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="any"
-              value={massText}
-              placeholder="0"
-              onChange={(event) => setMassText(event.target.value)}
-              aria-describedby={note ? 'mass-note' : undefined}
-              className="w-full max-w-[11rem] border border-zinc-300 px-3 py-2 text-base tabular-nums text-zinc-900 placeholder:text-zinc-400"
-            />
-            <span aria-hidden="true" className="text-sm text-zinc-600">
-              kg
-            </span>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-[8rem] flex-1">
+              <label htmlFor="quantity" className={LABEL}>
+                How much
+              </label>
+              <input
+                id="quantity"
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={quantityText}
+                placeholder="0"
+                onChange={(event) => setQuantityText(event.target.value)}
+                aria-describedby={unit?.note ? 'unit-note' : undefined}
+                className="mt-1.5 w-full border border-zinc-300 px-3 py-2 text-base tabular-nums text-zinc-900 placeholder:text-zinc-400"
+              />
+            </div>
+            <div className="min-w-[9rem] flex-1">
+              <label htmlFor="unit" className={LABEL}>
+                In what
+              </label>
+              <select
+                id="unit"
+                value={unitId}
+                onChange={(event) => setUnitId(event.target.value)}
+                className={`mt-1.5 ${FIELD}`}
+              >
+                {unitGroups.map((group) => (
+                  <optgroup key={group.measures} label={group.label}>
+                    {group.units.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.label} ({option.symbol})
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {note && offered && (
+          {presets.length > 0 && (
+            <div className="mt-2.5">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-zinc-600">
+                Common sizes
+                <ProvenanceChip provenance="assumed" />
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {presets.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => setQuantityText(String(preset.quantity))}
+                    aria-pressed={activePreset?.id === preset.id}
+                    className={`border px-2.5 py-1 text-sm ${
+                      activePreset?.id === preset.id
+                        ? 'border-accent bg-accent text-white'
+                        : 'border-dashed border-zinc-500 bg-white text-zinc-800'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-zinc-600">
+                {activePreset
+                  ? activePreset.note
+                  : 'These fill in a weight you can then edit. They assume a full cylinder, which is why they are marked as assumed rather than measured.'}
+              </p>
+            </div>
+          )}
+
+          {unit?.note && (
             <p
-              id="mass-note"
+              id="unit-note"
               className="mt-2 border-l-2 border-zinc-300 pl-2.5 text-xs leading-relaxed text-zinc-700"
             >
-              {offered.label} is normally sold by {note.soldBy}, not by weight. This calculator
-              works in kilograms, and no density has been sourced for it yet ({note.densityId}), so
-              you will need to work out the mass of what you bought yourself. Nothing here converts
-              it for you.
+              {unit.note}
             </p>
           )}
         </div>
+
+        {needsDensity && offered && (
+          <div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="min-w-[8rem] flex-1">
+                <label htmlFor="density" className={LABEL}>
+                  Density
+                  <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-600">
+                    required
+                  </span>
+                </label>
+                <input
+                  id="density"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  value={densityText}
+                  placeholder="0"
+                  onChange={(event) => setDensityText(event.target.value)}
+                  aria-describedby="density-note"
+                  className="mt-1.5 w-full border border-zinc-300 px-3 py-2 text-base tabular-nums text-zinc-900 placeholder:text-zinc-400"
+                />
+              </div>
+              <div className="min-w-[9rem] flex-1">
+                <label htmlFor="density-unit" className={LABEL}>
+                  Density units
+                </label>
+                <select
+                  id="density-unit"
+                  value={densityUnitId}
+                  onChange={(event) => setDensityUnitId(event.target.value)}
+                  className={`mt-1.5 ${FIELD}`}
+                >
+                  {densityChoices.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.symbol}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <p
+              id="density-note"
+              className="mt-2 border-l-2 border-zinc-300 pl-2.5 text-xs leading-relaxed text-zinc-700"
+            >
+              A volume only becomes a weight through a density, and no density for{' '}
+              {offered.label.toLowerCase()} has been sourced from an authority we can cite, so this
+              calculator will not supply one. Look on the supplier&rsquo;s specification sheet, in
+              your country&rsquo;s fuel standard, or on the bill itself. Whatever you enter is used
+              exactly as given, and every figure in the result moves in proportion to it.
+            </p>
+          </div>
+        )}
+
+        {needsCalorificBasis && (
+          <fieldset>
+            <legend className={LABEL}>
+              Is that a net or a gross figure
+              <span className="ml-1.5 font-normal normal-case tracking-normal text-zinc-600">
+                required
+              </span>
+            </legend>
+            <p className="mt-1.5 text-xs leading-relaxed text-zinc-700">
+              The Guidelines work in net (lower) heating values, and a gross figure is several
+              percent larger for the same fuel. Your bill or meter will say which it uses. The
+              calculator will not guess, because guessing would be a silent error rather than a
+              visible gap.
+            </p>
+            <div className="mt-2 space-y-2">
+              {CALORIFIC_BASES.map((basis) => (
+                <label
+                  key={basis}
+                  className="flex items-start gap-2.5 text-sm leading-snug text-zinc-900"
+                >
+                  <input
+                    type="radio"
+                    name="calorific-basis"
+                    value={basis}
+                    checked={calorificBasis === basis}
+                    onChange={() => setCalorificBasis(basis)}
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-accent"
+                  />
+                  <span>
+                    {CALORIFIC_BASIS_LABEL[basis]}
+                    <span className="block text-xs text-zinc-600">
+                      {basis === 'net'
+                        ? 'Used as entered. This is the basis the Guidelines themselves work in.'
+                        : 'Reduced by the rule of thumb in Vol 2 Ch 1 — about 5 % for oil, 10 % for gas — which is an approximation, and is flagged as one in the result.'}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         {needsTechnology && (
           <fieldset>
@@ -264,12 +474,25 @@ export function App() {
 
       <div aria-live="polite" className="mt-8">
         {outcome.kind === 'empty' && (
-          <p className="text-sm text-zinc-600">Enter a mass to see the result.</p>
+          <p className="text-sm text-zinc-600">Enter a quantity to see the result.</p>
         )}
 
         {outcome.kind === 'needs_technology' && (
           <p className="text-sm text-zinc-800">
             Choose a vehicle technology above to see the result.
+          </p>
+        )}
+
+        {outcome.kind === 'needs_density' && (
+          <p className="text-sm text-zinc-800">
+            Enter a density above to see the result. Without one there is no way to turn a volume
+            into a weight, and the calculator will not invent a figure.
+          </p>
+        )}
+
+        {outcome.kind === 'needs_calorific_basis' && (
+          <p className="text-sm text-zinc-800">
+            Say whether your energy figure is net or gross to see the result.
           </p>
         )}
 
@@ -285,7 +508,8 @@ export function App() {
             <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
               <h2 className="sr-only">Result</h2>
               <p className="text-xs tabular-nums text-zinc-600">
-                {formatQuantity(result.massKg)} kg {result.fuelLabel} · {result.categoryCode}
+                {formatQuantity(result.audit.inputs.quantity)} {result.audit.conversion.unitSymbol}{' '}
+                {result.fuelLabel} · {result.categoryCode}
               </p>
             </div>
 

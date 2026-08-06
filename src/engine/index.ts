@@ -5,7 +5,15 @@
  * I/O, so the engine is testable in a plain Node process.
  */
 export { toCarbonDioxideEquivalent } from './co2e';
-export { calculateFuelCombustion } from './combustion';
+export { calculateFuelCombustion, calculateFuelCombustionFromQuantity } from './combustion';
+export {
+  CANONICAL_UNITS,
+  USER_DENSITY_STEP_ID,
+  convertQuantity,
+  densityUnits,
+  findUnit,
+  quantityUnits,
+} from './conversion';
 export { EngineError, type EngineErrorCode } from './errors';
 export {
   GASES,

@@ -15,12 +15,14 @@
  */
 import { describe, expect, it } from 'vitest';
 import { parameters } from '../../data';
-import type { CategoryCode, Gas } from '../../data/types';
+import type { CategoryCode, Gas, UnitMeasure } from '../../data/types';
 import { calculateFuelCombustion } from '../combustion';
+import { CANONICAL_UNITS, convertQuantity, findUnit } from '../conversion';
 import { findEmissionFactors, findNetCalorificValue, GASES } from '../lookup';
 import { EXPECTED_EMISSION_FACTOR_UNIT, EXPECTED_NCV_UNIT } from '../units';
 
 const PROVENANCE_CLASSES = ['ipcc', 'external', 'assumed'];
+const CONVERSION_PROVENANCE_CLASSES = ['exact', 'ipcc_approximate', 'user_provided'];
 
 /**
  * The fuel/category combinations the MVP calculator offers.
@@ -292,6 +294,218 @@ describe('provenance is declared everywhere', () => {
         expect(density.verified).toBe(false);
       }
     }
+  });
+});
+
+describe('every unit is well formed', () => {
+  it('publishes units to check', () => {
+    expect(parameters.units.length).toBeGreaterThan(0);
+  });
+
+  it('has a unique id', () => {
+    const ids = parameters.units.map((unit) => unit.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('carries a finite positive factor, a symbol, a source and a class', () => {
+    for (const unit of parameters.units) {
+      expect(Number.isFinite(unit.factor), `${unit.id}: factor is not finite`).toBe(true);
+      expect(unit.factor).toBeGreaterThan(0);
+      expect(unit.symbol).toBeTruthy();
+      expect(unit.source).toBeTruthy();
+      expect(CONVERSION_PROVENANCE_CLASSES).toContain(unit.provenance);
+    }
+  });
+
+  it('declares every unit conversion exact, because every one is a definition', () => {
+    // Nothing in this table was measured. If a unit ever needs a class other
+    // than `exact`, it is not a unit conversion and does not belong here.
+    for (const unit of parameters.units) {
+      expect(unit.provenance, `${unit.id}`).toBe('exact');
+      expect(unit.verified, `${unit.id}`).toBe(true);
+    }
+  });
+
+  it('converts each unit to the canonical unit for what it measures', () => {
+    // A unit that named the wrong canonical would be out by orders of
+    // magnitude and would still look plausible in the audit trail.
+    for (const unit of parameters.units) {
+      expect(unit.canonical_unit, `${unit.id}`).toBe(CANONICAL_UNITS[unit.measures]);
+    }
+  });
+
+  it('never publishes two units of the same kind with a factor of 1', () => {
+    // Two identity units for the same kind of quantity would mean two names for
+    // the same thing, and the audit trail would say which was used only by id.
+    //
+    // Zero is allowed, and energy has zero on purpose: the canonical energy
+    // unit is the terajoule, which nobody's gas bill is denominated in, so it
+    // is not offered. A canonical unit is what the engine reduces to, not
+    // something a user has to be able to type.
+    const measures: UnitMeasure[] = ['mass', 'volume', 'energy', 'density'];
+
+    for (const measure of measures) {
+      const identity = parameters.units.filter(
+        (unit) => unit.measures === measure && unit.factor === 1,
+      );
+      expect(identity.length, `${measure}: more than one unit with factor 1`).toBeLessThanOrEqual(
+        1,
+      );
+      for (const unit of identity) {
+        expect(unit.canonical_unit).toBe(CANONICAL_UNITS[measure]);
+      }
+    }
+  });
+
+  it('offers no gallons and no therms', () => {
+    // Both have more than one definition in live use, and the difference is
+    // large enough to change an answer materially.
+    const ids = parameters.units.map((unit) => unit.id.toLowerCase());
+    expect(ids.some((id) => id.includes('gallon'))).toBe(false);
+    expect(ids.some((id) => id.includes('therm'))).toBe(false);
+  });
+});
+
+describe('every fuel can be entered in the unit it is sold in', () => {
+  it.each(parameters.fuels.map((fuel) => fuel.id))('%s names a default unit that exists', (fuelId) => {
+    const fuel = parameters.fuels.find((candidate) => candidate.id === fuelId);
+    const unit = findUnit(parameters, fuel?.default_unit ?? '');
+    expect(unit, `${fuelId}: default_unit "${fuel?.default_unit}" is not in units`).toBeDefined();
+    expect(unit?.measures).not.toBe('density');
+  });
+
+  it.each(parameters.fuels.map((fuel) => fuel.id))('%s can be calculated in its default unit', (fuelId) => {
+    // The end-to-end consequence: whatever unit a fuel is preselected in, the
+    // conversion layer must accept it, given the answers that unit requires.
+    const fuel = parameters.fuels.find((candidate) => candidate.id === fuelId);
+    const unit = findUnit(parameters, fuel?.default_unit ?? '');
+
+    const extras =
+      unit?.measures === 'volume'
+        ? { density: { value: 1, unit: 'kg_per_litre' } }
+        : unit?.measures === 'energy'
+          ? { calorificBasis: 'net' as const }
+          : {};
+
+    expect(() =>
+      convertQuantity(fuelId, { quantity: 1, unit: fuel?.default_unit ?? '', ...extras }),
+    ).not.toThrow();
+  });
+
+  it('defaults a fuel to a volume unit only where a density record exists to prompt from', () => {
+    for (const fuel of parameters.fuels) {
+      const unit = findUnit(parameters, fuel.default_unit);
+      if (unit?.measures !== 'volume') {
+        continue;
+      }
+      const density = parameters.densities.find((record) => record.fuel === fuel.id);
+      expect(density, `${fuel.id}: defaults to a volume but has no density record`).toBeDefined();
+    }
+  });
+
+  it('gives every density record a unit that is a unit of density', () => {
+    for (const density of parameters.densities) {
+      const unit = findUnit(parameters, density.unit);
+      expect(unit, `${density.id}: unit "${density.unit}" is not in units`).toBeDefined();
+      expect(unit?.measures).toBe('density');
+    }
+  });
+});
+
+describe('purchase presets are assumptions and say so', () => {
+  const presets = parameters.fuels.flatMap((fuel) =>
+    (fuel.presets ?? []).map((preset) => ({ fuel: fuel.id, preset })),
+  );
+
+  it('publishes presets to check', () => {
+    expect(presets.length).toBeGreaterThan(0);
+  });
+
+  it('marks every preset as assumed, never as sourced', () => {
+    // A 12.5 kg cylinder is named for what it holds when full. The preset is an
+    // assumption about the user's cylinder, not a measurement of it, and must
+    // never be presented as IPCC-derived (CLAUDE.md rule 2).
+    for (const { fuel, preset } of presets) {
+      expect(preset.provenance, `${fuel}/${preset.id}`).toBe('assumed');
+      expect(preset.verified).toBe(false);
+      expect(preset.source).toBeNull();
+      expect(preset.note, `${fuel}/${preset.id}: needs to say what it assumes`).toBeTruthy();
+    }
+  });
+
+  it('gives every preset a positive quantity in a unit that exists', () => {
+    for (const { fuel, preset } of presets) {
+      expect(preset.quantity, `${fuel}/${preset.id}`).toBeGreaterThan(0);
+      expect(findUnit(parameters, preset.unit), `${fuel}/${preset.id}`).toBeDefined();
+    }
+  });
+
+  it('gives every preset a unique id', () => {
+    const ids = presets.map(({ preset }) => preset.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe('the gross-to-net rules of thumb are complete and honest', () => {
+  it('publishes one conversion per family, and no family twice', () => {
+    const families = parameters.calorific_basis_conversions.map(
+      (conversion) => conversion.fuel_family,
+    );
+    expect(families.length).toBeGreaterThan(0);
+    expect(new Set(families).size).toBe(families.length);
+  });
+
+  it('classes every one as an IPCC approximation, and none as verified', () => {
+    // These are rules of thumb quoted from Vol 2 Ch 1, cited at chapter level.
+    // Marking one `exact` would claim the Guidelines quantify it; marking one
+    // verified would claim the exact section has been confirmed.
+    for (const conversion of parameters.calorific_basis_conversions) {
+      expect(conversion.provenance, conversion.id).toBe('ipcc_approximate');
+      expect(conversion.verified, conversion.id).toBe(false);
+      expect(conversion.source).toBeTruthy();
+      expect(conversion.note, `${conversion.id}: must name the Box 1.1 alternative`).toContain(
+        'Box 1.1',
+      );
+    }
+  });
+
+  it('reduces by a sensible percentage, never increases and never zeroes', () => {
+    for (const conversion of parameters.calorific_basis_conversions) {
+      expect(conversion.reduction_percent, conversion.id).toBeGreaterThan(0);
+      expect(conversion.reduction_percent, conversion.id).toBeLessThan(100);
+    }
+  });
+
+  it('gives every fuel that names a family a conversion to match it', () => {
+    // A fuel naming a family with no record would fail only at the moment a
+    // user entered a gross figure for it, which is the wrong time to find out.
+    const families = new Set(
+      parameters.calorific_basis_conversions.map((conversion) => conversion.fuel_family),
+    );
+
+    for (const fuel of parameters.fuels) {
+      if (fuel.calorific_basis_family === undefined) {
+        continue;
+      }
+      expect(families.has(fuel.calorific_basis_family), `${fuel.id}`).toBe(true);
+    }
+  });
+
+  it('gives no biomass fuel a family, because none is published for solid biomass', () => {
+    // Moisture content drives the gross-to-net difference for wood and
+    // charcoal, and it is both larger and more variable than either rule of
+    // thumb. Assigning one would be inventing a factor (CLAUDE.md rule 7).
+    for (const fuel of parameters.fuels.filter((candidate) => candidate.biomass)) {
+      expect(fuel.calorific_basis_family, `${fuel.id}`).toBeUndefined();
+    }
+  });
+
+  it('explains any family assignment that is not obvious from the fuel name', () => {
+    // LPG is the live case: a gas at ambient pressure, but classified by Table
+    // 1.1 as a liquid fuel, so it takes the coal-and-oil rule.
+    const lpg = parameters.fuels.find((fuel) => fuel.id === 'liquefied_petroleum_gases');
+    expect(lpg?.calorific_basis_family).toBe('coal_and_oil');
+    expect(lpg?.calorific_basis_family_note).toBeTruthy();
   });
 });
 

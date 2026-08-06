@@ -16,8 +16,8 @@
  * No arithmetic: this module reads and labels records, it does not compute.
  */
 import { parameters } from '../data';
-import type { CategoryCode, Fuel } from '../data/types';
-import { findEmissionFactors, GASES } from '../engine';
+import type { CategoryCode, Density, Fuel, FuelPreset, Unit, UnitMeasure } from '../data/types';
+import { densityUnits, findEmissionFactors, findUnit, GASES, quantityUnits } from '../engine';
 
 export interface OfferedFuel {
   id: string;
@@ -40,14 +40,6 @@ export interface TechnologyOption {
   label: string;
   /** False when the library publishes no plain-English label for it. */
   labelled: boolean;
-}
-
-/** How a fuel is normally bought, when that is not by mass. */
-export interface ConversionNote {
-  /** e.g. "the litre", "the cubic metre or the kilowatt-hour". */
-  soldBy: string;
-  /** Id of the unsourced density record that blocks the conversion. */
-  densityId: string;
 }
 
 function hasCompleteFactorSet(fuelId: string, category: CategoryCode): boolean {
@@ -146,33 +138,99 @@ const PREFERRED_DEFAULT_GWP_SET_ID = 'gwp_ar6_100';
 export const DEFAULT_GWP_SET_ID: string =
   GWP_SETS.find((set) => set.id === PREFERRED_DEFAULT_GWP_SET_ID)?.id ?? GWP_SETS[0].id;
 
-const UNIT_WORDS: Record<string, string> = {
-  litre: 'the litre',
-  m3: 'the cubic metre',
-  kWh: 'the kilowatt-hour',
+/** How the unit control groups its options. */
+export interface UnitGroup {
+  measures: UnitMeasure;
+  /** e.g. "By weight". Wording for a non-specialist, not the SI term. */
+  label: string;
+  units: Unit[];
+}
+
+const GROUP_LABEL: Record<UnitMeasure, string> = {
+  mass: 'By weight',
+  volume: 'By volume',
+  energy: 'By energy',
+  density: 'Density',
 };
 
+const GROUP_ORDER: UnitMeasure[] = ['mass', 'volume', 'energy'];
+
 /**
- * Whether this fuel is normally bought in something other than kilograms, and
- * is therefore blocked from a volume input by an unsourced density.
+ * The units this fuel may be entered in.
  *
- * Returns null for fuels sold by mass, and for any fuel whose density has
- * since been sourced — at which point the note would be untrue.
+ * Mass and energy are always offered. Mass because the calorific value in the
+ * library converts it; energy because the energy route needs no fuel-specific
+ * parameter at all — Eq 2.1 takes terajoules whatever was burnt.
+ *
+ * Volume is offered only where the library carries a density record for the
+ * fuel. The record is empty, and stays empty, so it supplies no number; what it
+ * does say is that this is a fuel somebody buys by volume, which is the
+ * question being asked here. Offering litres of firewood would be answering a
+ * question nobody asked.
  */
-export function conversionNote(fuel: Fuel): ConversionNote | null {
-  if (fuel.sold_by === 'mass') {
-    return null;
-  }
+export function unitsForFuel(fuel: Fuel): Unit[] {
+  const sellsByVolume = fuelDensityRecord(fuel) !== undefined;
 
-  const density = parameters.densities.find((record) => record.fuel === fuel.id);
-  if (!density || density.value !== null) {
-    return null;
-  }
+  return quantityUnits(parameters).filter(
+    (unit) => unit.measures !== 'volume' || sellsByVolume,
+  );
+}
 
-  const words = fuel.common_units.map((unit) => UNIT_WORDS[unit]).filter(Boolean) as string[];
+/** The same list, grouped for a `<select>` with `<optgroup>`s. */
+export function unitGroupsForFuel(fuel: Fuel): UnitGroup[] {
+  const units = unitsForFuel(fuel);
 
-  return {
-    soldBy: words.length > 0 ? words.join(' or ') : 'a unit other than mass',
-    densityId: density.id,
-  };
+  return GROUP_ORDER.map((measures) => ({
+    measures,
+    label: GROUP_LABEL[measures],
+    units: units.filter((unit) => unit.measures === measures),
+  })).filter((group) => group.units.length > 0);
+}
+
+/**
+ * The units a density may be given in, the one this fuel's suppliers quote first.
+ *
+ * The library's (empty) density record still names a unit, and that is the
+ * useful part of it: kilograms per litre for the liquids, kilograms per cubic
+ * metre for gas. Someone reading a kerosene spec sheet will have the first;
+ * someone reading a gas network's figures will have the second.
+ */
+export function densityUnitsForFuel(fuel: Fuel): Unit[] {
+  const preferred = fuelDensityRecord(fuel)?.unit;
+
+  return [...densityUnits(parameters)].sort(
+    (a, b) => Number(b.id === preferred) - Number(a.id === preferred),
+  );
+}
+
+/** The library's density record for a fuel, empty though it is. */
+export function fuelDensityRecord(fuel: Fuel): Density | undefined {
+  return parameters.densities.find((record) => record.fuel === fuel.id);
+}
+
+/**
+ * The fuel's preselected unit: the one it is actually sold in.
+ *
+ * Falls back to the first unit offered rather than crashing if the library ever
+ * names a default the fuel does not offer, which the data-integrity tests are
+ * what should catch.
+ */
+export function defaultUnitForFuel(fuel: Fuel): Unit {
+  const offered = unitsForFuel(fuel);
+  return offered.find((unit) => unit.id === fuel.default_unit) ?? offered[0];
+}
+
+/**
+ * The fuel's one-tap purchase quantities, for the unit currently selected.
+ *
+ * Empty unless the library publishes presets in that unit. A 12.5 kg cylinder
+ * preset is meaningless once the user has switched to pounds, so it is not
+ * offered there rather than silently converted.
+ */
+export function presetsForUnit(fuel: Fuel, unitId: string): FuelPreset[] {
+  return (fuel.presets ?? []).filter((preset) => preset.unit === unitId);
+}
+
+export function findUnitById(unitId: string): Unit | undefined {
+  return findUnit(parameters, unitId);
 }

@@ -6,14 +6,28 @@
  * applied. The audit trail is not debug output — it is the product. A number
  * without its provenance is not shippable (CLAUDE.md rule 1).
  */
-import type { CategoryCode, Gas, GwpOrigin, Provenance, Tier } from '../data/types';
+import type {
+  CategoryCode,
+  ConversionProvenance,
+  Gas,
+  GwpOrigin,
+  Provenance,
+  Tier,
+  UnitMeasure,
+} from '../data/types';
 
 /** What part a parameter plays in the calculation. */
 export type ParameterRole =
   | 'activity_data'
   | 'net_calorific_value'
   | 'emission_factor'
-  | 'global_warming_potential';
+  | 'global_warming_potential'
+  /** A defined conversion between units. */
+  | 'unit_conversion'
+  /** A density, used to turn a volume into a mass. Always user-supplied. */
+  | 'density'
+  /** The gross-to-net calorific approximation. */
+  | 'calorific_basis';
 
 /** Why an uncertainty term was left out of the Approach 1 combination. */
 export type UncertaintySkipReason =
@@ -22,7 +36,18 @@ export type UncertaintySkipReason =
   /** The caller supplied no uncertainty for this term (e.g. user-entered mass). */
   | 'not_provided'
   /** The central value is zero, so a percentage uncertainty is undefined. */
-  | 'zero_central_value';
+  | 'zero_central_value'
+  /**
+   * The value came from the user, so there is nobody to ask for an interval.
+   * The engine applies it exactly as given; "exact as applied" is not the same
+   * claim as "exact", which is why the term is recorded rather than dropped.
+   */
+  | 'user_provided'
+  /**
+   * A published approximation was applied whose error the source does not
+   * quantify — the gross-to-net calorific rule of thumb.
+   */
+  | 'approximation_not_quantified';
 
 /** An uncertainty term that was included in Eq 3.1. */
 export interface UncertaintyTerm {
@@ -115,7 +140,12 @@ export interface GasEmission {
  * complete answer. What remains here is the case where a figure was produced
  * but something about the parameters behind it should be shown alongside it.
  */
-export type GapKind = 'unverified_parameter';
+export type GapKind =
+  | 'unverified_parameter'
+  /** A number the user supplied stands where a sourced parameter would. */
+  | 'user_supplied_parameter'
+  /** An approximation with unquantified error was applied. */
+  | 'approximate_conversion';
 
 /**
  * A clearly-labelled caveat on a result the engine did produce.
@@ -128,6 +158,87 @@ export interface ParameterGap {
   gas?: Gas;
   parameterId?: string;
   message: string;
+}
+
+/** Whether an energy figure is a net (lower) or gross (higher) heating value. */
+export type CalorificBasis = 'net' | 'gross';
+
+/**
+ * One step of the unit conversion, with everything needed to check it by hand.
+ *
+ * A step is not a `FactorAudit`: it carries a `ConversionProvenance` rather than
+ * a parameter `Provenance`, because a definition, a rule of thumb and a figure
+ * the user typed in are three different kinds of claim, none of which is
+ * "read from an IPCC table" (CLAUDE.md rule 2).
+ */
+export interface ConversionStep {
+  /** Id of the library record applied, or of the step where none applies. */
+  id: string;
+  label: string;
+  provenance: ConversionProvenance;
+  factor: number;
+  /** How the factor is written, e.g. "kg per lb". */
+  factorUnit: string;
+  source: string | null;
+  verified: boolean;
+  fromValue: number;
+  fromUnit: string;
+  toValue: number;
+  toUnit: string;
+  /** The step with its numbers substituted in. */
+  workings: string;
+  /** True when the factor is a rule of thumb rather than a definition. */
+  approximate: boolean;
+  note: string | null;
+}
+
+/** How the quantity the user entered became something Eq 2.1 can use. */
+export interface ConversionAudit {
+  unitId: string;
+  unitLabel: string;
+  unitSymbol: string;
+  measures: UnitMeasure;
+  /** The number the user typed, in the unit they chose. */
+  quantity: number;
+  steps: ConversionStep[];
+  /** What the chain produced: a mass to be burnt, or energy outright. */
+  outcome: 'mass' | 'energy';
+  resultValue: number;
+  resultUnit: string;
+  /**
+   * False on the energy path. Entering energy skips the net calorific value
+   * altogether, which removes a term from Eq 3.1 rather than merely hiding it.
+   */
+  usesCalorificValue: boolean;
+  /** Which basis the user said their energy figure was on. Null off that path. */
+  calorificBasis: CalorificBasis | null;
+  /** Terms the conversion could not evaluate, to be carried into Eq 3.1. */
+  skippedUncertainty: SkippedUncertaintyTerm[];
+  /** Plain-English summary of what was done and what it rests on. */
+  note: string;
+}
+
+/** A converted input, discriminated by what the chain ended in. */
+export type ConvertedQuantity =
+  | { outcome: 'mass'; massKg: number; audit: ConversionAudit }
+  | { outcome: 'energy'; energyTJ: number; audit: ConversionAudit };
+
+/** A density supplied by the user, in a unit the library publishes. */
+export interface UserDensity {
+  value: number;
+  /** Id of a density unit, e.g. "kg_per_litre". */
+  unit: string;
+}
+
+/** What the user entered, before the engine knows what it means. */
+export interface FuelQuantity {
+  quantity: number;
+  /** Id of a unit in the library, e.g. "litre". */
+  unit: string;
+  /** Required for a volume unit. The engine never supplies one of its own. */
+  density?: UserDensity;
+  /** Required for an energy unit. The engine never assumes which basis. */
+  calorificBasis?: CalorificBasis;
 }
 
 /** How the input mass became an energy quantity. */
@@ -151,12 +262,22 @@ export interface CombustionAudit {
   };
   inputs: {
     fuelId: string;
-    massKg: number;
+    /** The number the user typed, in the unit they chose. */
+    quantity: number;
+    unitId: string;
+    /** Null when energy was entered: nothing was ever expressed as a mass. */
+    massKg: number | null;
     categoryCode: CategoryCode;
     vehicleTechnology: string | null;
     activityDataUncertaintyPercent: number | null;
   };
-  energyConversion: EnergyConversionAudit;
+  /** How the entered unit became kilograms or terajoules. */
+  conversion: ConversionAudit;
+  /**
+   * The net-calorific-value step. Null when energy was entered directly: there
+   * is no mass-to-energy conversion to show, because none was performed.
+   */
+  energyConversion: EnergyConversionAudit | null;
   /** Every parameter touched by this calculation, in the order it was applied. */
   factors: FactorAudit[];
 }
@@ -168,7 +289,8 @@ export interface CombustionResult {
   biomass: boolean;
   categoryCode: CategoryCode;
   categoryLabel: string;
-  massKg: number;
+  /** Null when the user entered energy: no mass was involved at any point. */
+  massKg: number | null;
   energyTJ: number;
   /** Gases that count towards the headline total. */
   totalContributing: GasEmission[];
