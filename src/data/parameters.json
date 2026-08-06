@@ -1,7 +1,7 @@
 {
-  "schema_version": "2.0.0",
-  "library_version": "0.2.1",
-  "updated": "2026-08-05",
+  "schema_version": "4.0.0",
+  "library_version": "0.4.0",
+  "updated": "2026-08-06",
   "methodology": "2006 IPCC Guidelines for National Greenhouse Gas Inventories",
   "readme": "Every record carries a provenance class. 'ipcc' values were read directly from the cited table of the 2006 IPCC Guidelines. 'external' values come from outside the Guidelines and must name their own source. 'assumed' values are our own simplifications. Nothing in this file may be treated as verified unless verified is true.",
 
@@ -11,12 +11,186 @@
     "assumed": "Our own estimate or simplification. Must be labelled as such in the UI."
   },
 
+  "conversion_provenance_classes": {
+    "exact": "A defined relationship between two units. Adds no uncertainty, because a definition is not a measurement and cannot be revised by a better source.",
+    "ipcc_approximate": "An approximation the 2006 IPCC Guidelines themselves offer. It is a rule of thumb, not a measured factor, and the Guidelines do not quantify how wrong it can be.",
+    "user_provided": "A figure the user supplied. The engine applies it exactly as given and records that it could not evaluate its uncertainty."
+  },
+
+  "conversion_provenance_note": "Unit conversions carry their own three classes and must never be shown using the parameter classes above. A converted quantity is not an emission parameter: nothing in 'units' was measured, and 'exact' is a stronger claim than 'ipcc' rather than a weaker one. Showing a defined conversion as 'assumed', or a user's own density as 'external', would both misdescribe it.",
+
   "uncertainty_convention": {
     "interval": "95 percent confidence interval as published by the IPCC",
     "note": "Several IPCC intervals are asymmetric about the default value. Where the engine treats them as symmetric for Approach 1 error propagation (Vol 1 Ch 3 Eq 3.1 and 3.2), it must flag that simplification in the audit trail.",
     "method_multiplication": "U_total = sqrt(U1^2 + U2^2 + ... + Un^2)  [Vol 1 Ch 3, Eq 3.1]",
     "method_addition": "U_total = sqrt(sum((Ui * xi)^2)) / sum(xi)  [Vol 1 Ch 3, Eq 3.2]"
   },
+
+  "units_note": "The units a user may enter a quantity in, and the defined factor that takes each one to the engine's canonical unit for its kind: kilograms for mass, cubic metres for volume, terajoules for energy, and kilograms per cubic metre for density. Every factor here is exact, because every one of them is a definition. Gallons and therms are deliberately absent: the US and imperial gallon differ by about 20 percent and the therm has more than one definition, so offering either would let a user enter a number that means something different from what they think it means.",
+
+  "units": [
+    {
+      "id": "g",
+      "label": "Grams",
+      "symbol": "g",
+      "measures": "mass",
+      "canonical_unit": "kg",
+      "factor": 0.001,
+      "provenance": "exact",
+      "source": "SI prefix definition: 1 kg = 10^3 g.",
+      "verified": true
+    },
+    {
+      "id": "kg",
+      "label": "Kilograms",
+      "symbol": "kg",
+      "measures": "mass",
+      "canonical_unit": "kg",
+      "factor": 1,
+      "provenance": "exact",
+      "source": "SI base unit of mass. This is the engine's canonical unit, so nothing is converted.",
+      "verified": true
+    },
+    {
+      "id": "t",
+      "label": "Tonnes",
+      "symbol": "t",
+      "measures": "mass",
+      "canonical_unit": "kg",
+      "factor": 1000,
+      "provenance": "exact",
+      "source": "Definition of the tonne (metric ton), accepted for use with the SI: 1 t = 10^3 kg.",
+      "verified": true
+    },
+    {
+      "id": "lb",
+      "label": "Pounds",
+      "symbol": "lb",
+      "measures": "mass",
+      "canonical_unit": "kg",
+      "factor": 0.45359237,
+      "provenance": "exact",
+      "source": "International yard and pound agreement (1959): 1 lb = 0.45359237 kg, exactly and by definition.",
+      "verified": true,
+      "note": "The avoirdupois pound. Exact, not rounded: the 1959 agreement defines the pound in terms of the kilogram rather than measuring it."
+    },
+    {
+      "id": "litre",
+      "label": "Litres",
+      "symbol": "L",
+      "measures": "volume",
+      "canonical_unit": "m3",
+      "factor": 0.001,
+      "provenance": "exact",
+      "source": "Definition of the litre, accepted for use with the SI: 1 L = 1 dm^3 = 10^-3 m^3.",
+      "verified": true,
+      "note": "A volume of fuel is only a quantity of fuel at a stated temperature. Warm fuel occupies more space than cold fuel, so the density you supply should be quoted at the same conditions as the volume you are entering."
+    },
+    {
+      "id": "m3",
+      "label": "Cubic metres",
+      "symbol": "m³",
+      "measures": "volume",
+      "canonical_unit": "m3",
+      "factor": 1,
+      "provenance": "exact",
+      "source": "SI unit of volume. This is the engine's canonical unit, so nothing is converted.",
+      "verified": true,
+      "note": "For a gas, a cubic metre is only a quantity of fuel at a stated temperature and pressure. Meters and bills state the reference conditions they use; the density you supply should be quoted at the same ones."
+    },
+    {
+      "id": "ft3",
+      "label": "Cubic feet",
+      "symbol": "ft³",
+      "measures": "volume",
+      "canonical_unit": "m3",
+      "factor": 0.028316846592,
+      "provenance": "exact",
+      "source": "Derived from the international foot, defined as exactly 0.3048 m (1959): 0.3048^3 = 0.028316846592 m^3, exactly.",
+      "verified": true,
+      "note": "The conversion from cubic feet to cubic metres is geometric and exact. The reference conditions are not: a cubic foot of gas is a different quantity of fuel at different temperatures and pressures, and gas meters marked in cubic feet do not all use the same basis. This engine does not convert between reference conditions and assumes none on your behalf — the conditions are carried entirely by the density you supply, which must be quoted on the same basis as your meter reading."
+    },
+    {
+      "id": "kWh",
+      "label": "Kilowatt-hours",
+      "symbol": "kWh",
+      "measures": "energy",
+      "canonical_unit": "TJ",
+      "factor": 3.6e-6,
+      "provenance": "exact",
+      "source": "Definition: 1 W = 1 J/s and 1 h = 3600 s, so 1 kWh = 3.6 MJ exactly, and 1 TJ = 10^6 MJ.",
+      "verified": true
+    },
+    {
+      "id": "MJ",
+      "label": "Megajoules",
+      "symbol": "MJ",
+      "measures": "energy",
+      "canonical_unit": "TJ",
+      "factor": 1e-6,
+      "provenance": "exact",
+      "source": "SI prefix definition: 1 TJ = 10^6 MJ.",
+      "verified": true
+    },
+    {
+      "id": "GJ",
+      "label": "Gigajoules",
+      "symbol": "GJ",
+      "measures": "energy",
+      "canonical_unit": "TJ",
+      "factor": 0.001,
+      "provenance": "exact",
+      "source": "SI prefix definition: 1 TJ = 10^3 GJ.",
+      "verified": true
+    },
+    {
+      "id": "kg_per_litre",
+      "label": "Kilograms per litre",
+      "symbol": "kg/L",
+      "measures": "density",
+      "canonical_unit": "kg/m3",
+      "factor": 1000,
+      "provenance": "exact",
+      "source": "Follows from the definition of the litre: 1 m^3 = 10^3 L, so 1 kg/L = 10^3 kg/m^3.",
+      "verified": true
+    },
+    {
+      "id": "kg_per_m3",
+      "label": "Kilograms per cubic metre",
+      "symbol": "kg/m³",
+      "measures": "density",
+      "canonical_unit": "kg/m3",
+      "factor": 1,
+      "provenance": "exact",
+      "source": "SI-coherent unit of density. This is the engine's canonical unit, so nothing is converted.",
+      "verified": true
+    }
+  ],
+
+  "calorific_basis_note": "The net calorific values and emission factors in this library are on a net (lower) heating value basis, which is what the 2006 IPCC Guidelines work in. Energy figures printed on bills and meters are sometimes gross (higher heating value) instead, and the difference is not negligible. Vol 2 Ch 1 Section 1.4.1.2 offers a rule of thumb: the net calorific value is about 5 percent below the gross for coal and oil, and about 10 percent below for most natural and manufactured gases. Box 1.1, immediately after that text, gives an exact algorithm for the conversion, but it needs fuel analysis data — hydrogen and moisture content — that no household user will have, which is why the rule of thumb is what this calculator can offer. It is an approximation and every figure derived through it is flagged as one. A fuel is converted only where one of the two rules plainly covers it. Charcoal and firewood are covered by neither: their gross-to-net difference is driven by moisture content and is both larger and more variable than 5 percent. Nor is LPG, which the Guidelines classify as a liquid fuel but which is a gas at ambient pressure — the two rules point opposite ways and neither is clearly the right one. For all three, a gross figure is refused rather than converted.",
+
+  "calorific_basis_conversions": [
+    {
+      "id": "gcv_to_ncv_coal_and_oil",
+      "label": "Gross to net calorific value, coal and oil",
+      "fuel_family": "coal_and_oil",
+      "reduction_percent": 5,
+      "provenance": "ipcc_approximate",
+      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1, Section 1.4.1.2 (Conversion of Energy Units), in the text immediately preceding Box 1.1",
+      "verified": true,
+      "note": "Approximate: the Guidelines say 'about' 5 percent and do not quantify how far off that can be, so a figure derived through it carries an uncertainty term the engine cannot evaluate. Box 1.1, immediately after the cited text, gives an exact algorithm for converting between gross and net calorific values, but it requires fuel analysis data the user will not have."
+    },
+    {
+      "id": "gcv_to_ncv_natural_and_manufactured_gas",
+      "label": "Gross to net calorific value, natural and manufactured gas",
+      "fuel_family": "natural_and_manufactured_gas",
+      "reduction_percent": 10,
+      "provenance": "ipcc_approximate",
+      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1, Section 1.4.1.2 (Conversion of Energy Units), in the text immediately preceding Box 1.1",
+      "verified": true,
+      "note": "Approximate, and stated by the Guidelines as covering most such gases rather than all of them, so a figure derived through it carries an uncertainty term the engine cannot evaluate. Box 1.1, immediately after the cited text, gives an exact algorithm requiring fuel analysis data the user will not have."
+    }
+  ],
 
   "categories": {
     "1A4b": "Energy > Fuel combustion > Other sectors > Residential",
@@ -123,25 +297,57 @@
       "label": "Liquefied petroleum gas (LPG)",
       "biomass": false,
       "sold_by": "mass",
-      "common_units": ["kg", "cylinder_12.5kg", "cylinder_6kg", "cylinder_3kg"],
-      "mvp": true
+      "default_unit": "kg",
+      "calorific_basis_family_note": "Table 1.1 classifies liquefied petroleum gases as a liquid fuel, which would point at the 5 percent rule; but LPG is a gas at ambient pressure, which points at the 10 percent one. The two differ by a factor of two, and choosing between them on the strength of a classification would mean picking a number rather than reading one. LPG is sold by weight in any case, where the question does not arise.",
+      "presets": [
+        {
+          "id": "lpg_cylinder_12_5kg",
+          "label": "12.5 kg cylinder",
+          "unit": "kg",
+          "quantity": 12.5,
+          "provenance": "assumed",
+          "source": null,
+          "verified": false,
+          "note": "Assumes one full cylinder. A cylinder is named by the mass of gas it holds when full, so a part-used one holds less than its name. Edit the kilograms if yours was not full."
+        },
+        {
+          "id": "lpg_cylinder_6kg",
+          "label": "6 kg cylinder",
+          "unit": "kg",
+          "quantity": 6,
+          "provenance": "assumed",
+          "source": null,
+          "verified": false,
+          "note": "Assumes one full cylinder. Edit the kilograms if yours was not full."
+        },
+        {
+          "id": "lpg_cylinder_3kg",
+          "label": "3 kg cylinder",
+          "unit": "kg",
+          "quantity": 3,
+          "provenance": "assumed",
+          "source": null,
+          "verified": false,
+          "note": "Assumes one full cylinder. Edit the kilograms if yours was not full."
+        }
+      ]
     },
     {
       "id": "charcoal",
       "label": "Charcoal",
       "biomass": true,
       "sold_by": "mass",
-      "common_units": ["kg", "bag_50kg"],
-      "mvp": true,
-      "note": "Bag weights vary widely by market. Treat any bag preset as 'assumed' and let the user override."
+      "default_unit": "kg",
+      "calorific_basis_family_note": "Neither rule covers solid biomass. For charcoal the gross-to-net difference is driven by moisture content, which makes it both larger and more variable than the 5 percent that applies to coal and oil.",
+      "note": "Bag weights vary widely by market, so no bag preset is offered; see open_questions."
     },
     {
       "id": "wood_wood_waste",
       "label": "Firewood / wood waste",
       "biomass": true,
       "sold_by": "mass",
-      "common_units": ["kg"],
-      "mvp": true,
+      "default_unit": "kg",
+      "calorific_basis_family_note": "Neither rule covers solid biomass. For firewood the gross-to-net difference is driven by moisture content, which makes it both larger and more variable than the 5 percent that applies to coal and oil.",
       "note": "Moisture content drives the very wide NCV interval (7.9 to 31.0 TJ/Gg). Expect large uncertainty and say so in the UI."
     },
     {
@@ -149,8 +355,8 @@
       "label": "Kerosene",
       "biomass": false,
       "sold_by": "volume",
-      "common_units": ["litre"],
-      "mvp": false,
+      "default_unit": "litre",
+      "calorific_basis_family": "coal_and_oil",
       "blocked_by": "density_other_kerosene"
     },
     {
@@ -158,8 +364,8 @@
       "label": "Petrol (motor gasoline)",
       "biomass": false,
       "sold_by": "volume",
-      "common_units": ["litre"],
-      "mvp": false,
+      "default_unit": "litre",
+      "calorific_basis_family": "coal_and_oil",
       "blocked_by": "density_motor_gasoline"
     },
     {
@@ -167,8 +373,8 @@
       "label": "Diesel (gas/diesel oil)",
       "biomass": false,
       "sold_by": "volume",
-      "common_units": ["litre"],
-      "mvp": false,
+      "default_unit": "litre",
+      "calorific_basis_family": "coal_and_oil",
       "blocked_by": "density_gas_diesel_oil"
     },
     {
@@ -176,9 +382,10 @@
       "label": "Natural gas",
       "biomass": false,
       "sold_by": "volume_or_energy",
-      "common_units": ["m3", "kWh"],
-      "mvp": false,
-      "blocked_by": "density_natural_gas"
+      "default_unit": "kWh",
+      "calorific_basis_family": "natural_and_manufactured_gas",
+      "blocked_by": "density_natural_gas",
+      "note": "Defaults to the kilowatt-hour because that is what a gas bill states. Entering energy skips the calorific value altogether, which is why natural gas is usable without the density this record is otherwise blocked by."
     }
   ],
 
@@ -607,50 +814,52 @@
     }
   ],
 
+  "densities_note": "Every density here is still null and still unsourced. What changed is what that now means: the calculator no longer refuses volume input outright, it asks the user for the density instead and labels the result as resting on a figure they supplied. A null value here means the engine has no density to fall back on and must ask — it does not mean the engine may guess one. The 'unit' field is the unit the density prompt is offered in for that fuel, because it is the one the fuel's own suppliers quote.",
+
   "densities": [
     {
       "id": "density_motor_gasoline",
       "fuel": "motor_gasoline",
       "value": null,
-      "unit": "kg/litre",
+      "unit": "kg_per_litre",
       "provenance": "external",
       "source": null,
       "verified": false,
       "status": "unsourced",
-      "blocking": "Volume-based petrol input cannot be calculated until this is sourced from a citable authority. Do not populate from general knowledge."
+      "blocking": "No default density for petrol. Volume input works only from a density the user supplies, and the result is labelled as such. Do not populate this from general knowledge — a sourced value here would silently become the default for every user."
     },
     {
       "id": "density_gas_diesel_oil",
       "fuel": "gas_diesel_oil",
       "value": null,
-      "unit": "kg/litre",
+      "unit": "kg_per_litre",
       "provenance": "external",
       "source": null,
       "verified": false,
       "status": "unsourced",
-      "blocking": "Volume-based diesel input blocked."
+      "blocking": "No default density for diesel. Volume input works only from a density the user supplies."
     },
     {
       "id": "density_other_kerosene",
       "fuel": "other_kerosene",
       "value": null,
-      "unit": "kg/litre",
+      "unit": "kg_per_litre",
       "provenance": "external",
       "source": null,
       "verified": false,
       "status": "unsourced",
-      "blocking": "Volume-based kerosene input blocked."
+      "blocking": "No default density for kerosene. Volume input works only from a density the user supplies."
     },
     {
       "id": "density_natural_gas",
       "fuel": "natural_gas",
       "value": null,
-      "unit": "kg/m3",
+      "unit": "kg_per_m3",
       "provenance": "external",
       "source": null,
       "verified": false,
       "status": "unsourced",
-      "blocking": "Cubic-metre natural gas input blocked. Composition varies by network, so a single global value may not be defensible."
+      "blocking": "No default density for natural gas. Composition varies by network, so a single global value may not be defensible even once sourced — which is an argument for asking the user rather than publishing one. Entering the bill's kilowatt-hours avoids the question entirely."
     }
   ],
 
@@ -842,7 +1051,7 @@
   ],
 
   "open_questions": [
-    "Source fuel densities from a citable authority before enabling volume-based inputs.",
+    "Source fuel densities from a citable authority, so that volume input has a default the user can accept rather than a question they must answer. Asking the user unblocks the input; it does not close this gap.",
     "Verify all GWP values against the primary IPCC assessment reports, and replace each set's report-level source with the exact table reference (source_precision is currently report_level on every set).",
     "Confirm with a reviewer that picking the AR6 methane GWP from the fuel's biomass flag is the right rule, now that the engine does so: biomass fuels get the non-fossil value, everything else the fossil one.",
     "Confirm IPCC/IGES copyright position on reproducing default factor tables in a commercial product.",

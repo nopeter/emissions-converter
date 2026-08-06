@@ -14,12 +14,22 @@ import type { ReactNode } from 'react';
 import type {
   CarbonDioxideEquivalentResult,
   CombustionResult,
+  ConversionAudit,
+  ConversionStep,
   FactorAudit,
   GasEmission,
   UncertaintyResult,
 } from '../engine';
-import { formatPercent, formatQuantity, GAS_FORMULA, GWP_ORIGIN_LABEL, ROLE_LABEL } from './format';
-import { ProvenanceChip } from './ProvenanceChip';
+import {
+  CALORIFIC_BASIS_LABEL,
+  formatPercent,
+  formatQuantity,
+  GAS_FORMULA,
+  GWP_ORIGIN_LABEL,
+  ROLE_LABEL,
+  SKIP_REASON_LABEL,
+} from './format';
+import { ConversionChip, ProvenanceChip } from './ProvenanceChip';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -97,6 +107,83 @@ function Factor({ factor }: { factor: FactorAudit }) {
   );
 }
 
+/**
+ * One step of the unit conversion, printed as arithmetic.
+ *
+ * Every step shows its factor, where the factor comes from and the sum with the
+ * numbers in, whether it is a definition or a figure the user typed. A
+ * conversion the reader cannot check is a conversion they have to trust, and
+ * this product's whole claim is that they should not have to.
+ */
+function Step({ step }: { step: ConversionStep }) {
+  return (
+    <div className="mt-3 border border-zinc-200 p-2.5 first:mt-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-xs font-semibold text-zinc-900">{step.label}</p>
+        <ConversionChip provenance={step.provenance} />
+      </div>
+
+      <p className="mt-1.5 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs tabular-nums text-zinc-900">
+        {step.workings}
+      </p>
+
+      <dl className="mt-2">
+        <Field label="Factor" value={`${formatQuantity(step.factor)} ${step.factorUnit}`} />
+        <Field
+          label="Adds uncertainty"
+          value={step.approximate ? 'Yes — an approximation' : 'No — a defined conversion'}
+        />
+        <Field
+          label="Checked against source"
+          value={step.verified ? 'Yes' : 'No — not yet verified'}
+        />
+      </dl>
+
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-700">
+        <span className="text-zinc-600">Source: </span>
+        {step.source ?? 'No source recorded on this step.'}
+      </p>
+
+      {step.note !== null && (
+        <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-600">{step.note}</p>
+      )}
+    </div>
+  );
+}
+
+/** How what the user typed became something Eq 2.1 can be applied to. */
+function ConversionWorking({ conversion }: { conversion: ConversionAudit }) {
+  return (
+    <>
+      <p className="text-[11px] leading-relaxed text-zinc-700">{conversion.note}</p>
+
+      <dl className="mt-2">
+        <Field
+          label="Entered"
+          value={`${formatQuantity(conversion.quantity)} ${conversion.unitSymbol}`}
+        />
+        <Field
+          label="Used as"
+          value={`${formatQuantity(conversion.resultValue)} ${conversion.resultUnit}`}
+        />
+        {conversion.calorificBasis !== null && (
+          <Field label="Heating value" value={CALORIFIC_BASIS_LABEL[conversion.calorificBasis]} />
+        )}
+        <Field
+          label="Net calorific value used"
+          value={conversion.usesCalorificValue ? 'Yes' : 'No — energy was entered directly'}
+        />
+      </dl>
+
+      <div className="mt-2">
+        {conversion.steps.map((step) => (
+          <Step key={step.id} step={step} />
+        ))}
+      </div>
+    </>
+  );
+}
+
 function Uncertainty({ uncertainty }: { uncertainty: UncertaintyResult }) {
   return (
     <>
@@ -140,7 +227,12 @@ function Uncertainty({ uncertainty }: { uncertainty: UncertaintyResult }) {
           </p>
           {uncertainty.skipped.map((skipped) => (
             <div key={skipped.parameterId} className="mt-1.5">
-              <p className="text-xs text-zinc-900">{skipped.label}</p>
+              <p className="text-xs text-zinc-900">
+                {skipped.label}
+                <span className="ml-1.5 text-[11px] text-zinc-600">
+                  {SKIP_REASON_LABEL[skipped.reason]}
+                </span>
+              </p>
               <p className="text-[11px] leading-relaxed text-zinc-700">{skipped.note}</p>
             </div>
           ))}
@@ -294,14 +386,25 @@ export function Working({
         <Section title="Inputs">
           <dl>
             <Field label="Fuel" value={audit.inputs.fuelId} />
-            <Field label="Mass" value={`${formatQuantity(audit.inputs.massKg)} kg`} />
+            <Field
+              label="Quantity"
+              value={`${formatQuantity(audit.inputs.quantity)} ${audit.conversion.unitSymbol}`}
+            />
+            <Field
+              label="Mass"
+              value={
+                audit.inputs.massKg === null
+                  ? 'Not applicable — energy was entered'
+                  : `${formatQuantity(audit.inputs.massKg)} kg`
+              }
+            />
             <Field label="Category" value={audit.inputs.categoryCode} />
             <Field
               label="Vehicle technology"
               value={audit.inputs.vehicleTechnology ?? 'Not applicable'}
             />
             <Field
-              label="Uncertainty of the entered mass"
+              label="Uncertainty of the entered quantity"
               value={
                 audit.inputs.activityDataUncertaintyPercent === null
                   ? 'Not supplied'
@@ -311,11 +414,25 @@ export function Working({
           </dl>
         </Section>
 
+        <Section title="Unit conversion">
+          <ConversionWorking conversion={audit.conversion} />
+        </Section>
+
         <Section title="Energy conversion">
-          <Verbatim>{audit.energyConversion.equation}</Verbatim>
-          <p className="mt-1.5 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs tabular-nums text-zinc-900">
-            {audit.energyConversion.workings}
-          </p>
+          {audit.energyConversion === null ? (
+            <p className="text-[11px] leading-relaxed text-zinc-700">
+              None. The energy was entered directly, so no net calorific value was applied and no
+              mass was ever calculated. That is why the uncertainty below is smaller than it would
+              be for the same fuel entered by weight: the calorific value is not a term in it.
+            </p>
+          ) : (
+            <>
+              <Verbatim>{audit.energyConversion.equation}</Verbatim>
+              <p className="mt-1.5 overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs tabular-nums text-zinc-900">
+                {audit.energyConversion.workings}
+              </p>
+            </>
+          )}
         </Section>
 
         {gases.map((emission) => (

@@ -17,6 +17,88 @@
 /** Provenance class. Must be surfaced in the UI; see CLAUDE.md rule 2. */
 export type Provenance = 'ipcc' | 'external' | 'assumed';
 
+/**
+ * Provenance class for a unit conversion. A separate, parallel vocabulary.
+ *
+ * A conversion is not an emission parameter and does not belong to the three
+ * classes above. Nothing in `units` was measured: `exact` says the relationship
+ * is a definition, which is a stronger claim than `ipcc`, not a weaker one.
+ * `ipcc_approximate` is the one place the Guidelines offer a rule of thumb
+ * instead of a factor, and `user_provided` covers a figure the user typed in.
+ *
+ * The two vocabularies must never be shown with the same chip; see
+ * `conversion_provenance_note` in the library.
+ */
+export type ConversionProvenance = 'exact' | 'ipcc_approximate' | 'user_provided';
+
+/** What kind of quantity a unit measures. */
+export type UnitMeasure = 'mass' | 'volume' | 'energy' | 'density';
+
+/**
+ * A unit the user may enter a quantity in, and the defined factor that takes it
+ * to the engine's canonical unit for its kind.
+ *
+ * Canonical units: kilograms for mass, cubic metres for volume, terajoules for
+ * energy, kilograms per cubic metre for density. Every factor is exact, because
+ * every one of them is a definition rather than a measurement — which is why
+ * applying one adds no uncertainty term.
+ */
+export interface Unit {
+  id: string;
+  label: string;
+  /** How the unit is written beside a number, e.g. "m³". */
+  symbol: string;
+  measures: UnitMeasure;
+  canonical_unit: string;
+  factor: number;
+  provenance: ConversionProvenance;
+  source: string;
+  verified: boolean;
+  note?: string;
+}
+
+/**
+ * The Guidelines' rule of thumb for converting a gross calorific value to a net
+ * one, for one family of fuels.
+ *
+ * `reduction_percent` is what Vol 2 Ch 1 actually states — "about 5 percent
+ * below" — and the multiplier is derived from it in the engine rather than
+ * stored, so there is one number here to be wrong rather than two that can
+ * disagree. There is deliberately no record for solid biomass: the Guidelines
+ * publish no rule of thumb for it, and the engine refuses rather than borrowing
+ * the coal-and-oil one (CLAUDE.md rule 7).
+ */
+export interface CalorificBasisConversion {
+  id: string;
+  label: string;
+  fuel_family: string;
+  /** How far below the gross value the net value sits, in percent. */
+  reduction_percent: number;
+  provenance: ConversionProvenance;
+  source: string;
+  verified: boolean;
+  note: string;
+}
+
+/**
+ * A common purchase quantity offered as a one-tap shortcut, e.g. a gas cylinder.
+ *
+ * Always `assumed`: a 12.5 kg cylinder is named by what it holds when full, so
+ * the preset assumes a full one. The UI must put the resulting figure in an
+ * editable field rather than treating it as measured (CLAUDE.md rule 2).
+ */
+export interface FuelPreset {
+  id: string;
+  label: string;
+  /** Id of the unit `quantity` is expressed in. */
+  unit: string;
+  quantity: number;
+  provenance: Provenance;
+  source: string | null;
+  verified: boolean;
+  note: string;
+}
+
 /** The three gases the engine computes. CO2-equivalent is a derived view, added later. */
 export type Gas = 'CO2' | 'CH4' | 'N2O';
 
@@ -74,11 +156,31 @@ export interface Fuel {
    */
   biomass: boolean;
   sold_by: 'mass' | 'volume' | 'volume_or_energy';
-  common_units: string[];
-  /** In the current minimum viable product scope. */
-  mvp: boolean;
-  /** Id of a missing parameter (typically a density) that blocks this fuel. */
+  /** Id of the unit to preselect: the one this fuel is actually sold in. */
+  default_unit: string;
+  /**
+   * Which gross-to-net rule of thumb applies, when one plainly does. Absent for
+   * solid biomass, which the Guidelines' two rules do not cover, and for LPG,
+   * which they point at from both directions at once. The engine refuses a
+   * gross energy figure for those rather than borrowing a family's number.
+   */
+  calorific_basis_family?: string;
+  /**
+   * Why this fuel is in that family, or why it is in none.
+   *
+   * Required wherever `calorific_basis_family` is absent, because the engine
+   * puts this text in front of the user when it refuses their gross energy
+   * figure. Write it for them, not for us: no repo references, no jargon.
+   */
+  calorific_basis_family_note?: string;
+  /**
+   * Id of an unsourced density record. It no longer blocks the fuel outright —
+   * the user is asked for a density instead — but it does mean there is no
+   * default to offer them, and no value the engine may fall back on.
+   */
   blocked_by?: string;
+  /** One-tap purchase quantities, e.g. gas cylinders. Always `assumed`. */
+  presets?: FuelPreset[];
   note?: string;
 }
 
@@ -114,6 +216,11 @@ export interface EmissionFactor extends ProvenancedRecord, ConfidenceInterval95 
 export interface Density extends ProvenancedRecord {
   fuel: string;
   value: number | null;
+  /**
+   * Id of a density unit in `units`. With `value` null this is the record's
+   * most useful field: it names the unit this fuel's suppliers quote, which is
+   * the one the density prompt should offer first.
+   */
   unit: string;
   status?: 'unsourced' | 'sourced';
   /** Plain-English explanation of what the missing value blocks. */
@@ -189,11 +296,21 @@ export interface ParameterLibrary {
   methodology: string;
   readme: string;
   provenance_classes: Record<Provenance, string>;
+  conversion_provenance_classes: Record<ConversionProvenance, string>;
+  /** Why unit conversions do not share the parameter provenance classes. */
+  conversion_provenance_note: string;
   uncertainty_convention: UncertaintyConvention;
+  units_note: string;
+  units: Unit[];
+  /** Why a gross calorific value has to be converted, and how approximately. */
+  calorific_basis_note: string;
+  calorific_basis_conversions: CalorificBasisConversion[];
   categories: Record<CategoryCode, string>;
   net_calorific_values: NetCalorificValue[];
   fuels: Fuel[];
   emission_factors: EmissionFactor[];
+  /** What a null density now means: ask the user, never guess. */
+  densities_note: string;
   densities: Density[];
   /**
    * Why every GWP set is `external`, with the citations. Library-level because

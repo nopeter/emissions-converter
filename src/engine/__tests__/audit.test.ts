@@ -15,8 +15,13 @@ describe('audit trail', () => {
   const result = calculateFuelCombustion('liquefied_petroleum_gases', 150, '1A4b');
 
   it('echoes back every input', () => {
+    // The quantity and its unit are echoed alongside the mass, because with
+    // unit selection the two are no longer the same thing: 150 here happens to
+    // be kilograms, but the audit has to say so rather than leave it implied.
     expect(result.audit.inputs).toEqual({
       fuelId: 'liquefied_petroleum_gases',
+      quantity: 150,
+      unitId: 'kg',
       massKg: 150,
       categoryCode: '1A4b',
       vehicleTechnology: null,
@@ -34,10 +39,26 @@ describe('audit trail', () => {
   });
 
   it('shows the mass-to-energy conversion as arithmetic a reader can check', () => {
-    expect(result.audit.energyConversion.workings).toBe(
+    expect(result.audit.energyConversion?.workings).toBe(
       '150 kg = 0.00015 Gg; 0.00015 Gg x 47.3 TJ/Gg = 0.007095 TJ',
     );
-    expect(result.audit.energyConversion.equation).toContain('Table 1.2');
+    expect(result.audit.energyConversion?.equation).toContain('Table 1.2');
+  });
+
+  it('shows the unit conversion too, even when there was nothing to convert', () => {
+    // Kilograms in, kilograms out. The step is still recorded rather than
+    // skipped: "no conversion was applied" is itself something the reader is
+    // entitled to see stated, not something they should have to infer from an
+    // empty list.
+    expect(result.audit.conversion.steps).toHaveLength(1);
+    expect(result.audit.conversion.steps[0]).toMatchObject({
+      id: 'kg',
+      provenance: 'exact',
+      factor: 1,
+      approximate: false,
+    });
+    expect(result.audit.conversion.outcome).toBe('mass');
+    expect(result.audit.conversion.usesCalorificValue).toBe(true);
   });
 
   it('names Eq 2.1 and shows the substituted numbers for each gas', () => {

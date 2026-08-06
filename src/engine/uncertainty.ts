@@ -156,13 +156,18 @@ export function evaluateCandidate(
  * Vol 1 Ch 3, Eq 3.1:  U_total = sqrt(U1^2 + U2^2 + ... + Un^2)
  *
  * @param equation the equation text, quoted from the parameter library.
+ * @param alreadySkipped omissions established before this step — a density the
+ *   user supplied, or an approximate calorific conversion — carried in so they
+ *   travel with the combined figure rather than being lost between layers.
+ *   They come first, because they happened first.
  */
 export function combineMultiplicative(
   candidates: UncertaintyCandidate[],
   equation: string,
+  alreadySkipped: SkippedUncertaintyTerm[] = [],
 ): UncertaintyResult {
   const terms: UncertaintyTerm[] = [];
-  const skipped: SkippedUncertaintyTerm[] = [];
+  const skipped: SkippedUncertaintyTerm[] = [...alreadySkipped];
 
   for (const candidate of candidates) {
     const outcome = evaluateCandidate(candidate);
