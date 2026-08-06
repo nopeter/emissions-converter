@@ -421,7 +421,7 @@ export function App() {
                     <span className="block text-xs text-zinc-600">
                       {basis === 'net'
                         ? 'Used as entered. This is the basis the Guidelines themselves work in.'
-                        : 'Reduced by the rule of thumb in Vol 2 Ch 1 — about 5 % for oil, 10 % for gas — which is an approximation, and is flagged as one in the result.'}
+                        : 'Reduced by the rule of thumb in Vol 2 Ch 1 § 1.4.1.2 — about 5 % for coal and oil, 10 % for gas — which is an approximation, and is flagged as one in the result. Fuels those two rules do not cover are refused rather than converted, and the calculator will say so.'}
                     </span>
                   </span>
                 </label>

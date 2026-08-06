@@ -378,11 +378,12 @@ function requireCalorificBasisConversion(
   if (family === undefined) {
     throw new EngineError(
       'missing_calorific_basis_conversion',
-      `No gross-to-net calorific conversion is published for ${fuel.label}. Vol 2 Ch 1 gives a ` +
-        `rule of thumb for coal and oil and another for natural and manufactured gas, but ` +
-        `neither covers solid biomass, where the difference is driven by moisture content and ` +
-        `is both larger and more variable. The engine will not borrow another fuel family's ` +
-        `figure. Enter a net (lower) heating value, or enter the mass instead.`,
+      `No gross-to-net calorific conversion applies to ${fuel.label}. Vol 2 Ch 1 Section ` +
+        `1.4.1.2 gives one rule of thumb for coal and oil and another for natural and ` +
+        `manufactured gas, and neither plainly covers this fuel. ` +
+        `${fuel.calorific_basis_family_note ?? ''} `.trim() +
+        ` The engine will not borrow a rule from a fuel family this one is not in. Enter a net ` +
+        `(lower) heating value, or enter the amount by weight or volume instead.`,
     );
   }
 

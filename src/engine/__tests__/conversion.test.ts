@@ -398,20 +398,20 @@ describe('gross to net, by the rule of thumb in Vol 2 Ch 1', () => {
   });
 
   it('takes 5 percent off an oil-product figure', () => {
-    // 7095 MJ LPG, gross. Table 1.1 classifies LPG as a liquid fuel, so the
-    // coal-and-oil rule applies, not the gas one.
+    // 1000 MJ kerosene, gross. Kerosene is unambiguously an oil product, so
+    // the coal-and-oil rule applies.
     //
-    //   gross  = 7095e-6               = 0.007095 TJ
-    //   net    = 0.007095 x 0.95       = 0.00674025 TJ
-    //   CO2    = 0.00674025 x 63100    = 425.309775 kg
+    //   gross  = 1000e-6               = 0.001 TJ
+    //   net    = 0.001 x (1 - 5/100)   = 0.001 x 0.95 = 0.00095 TJ
+    //   CO2    = 0.00095 x 71900       = 68.305 kg
     const result = calculateFuelCombustionFromQuantity(
-      LPG,
-      { quantity: 7095, unit: 'MJ', calorificBasis: 'gross' },
+      'other_kerosene',
+      { quantity: 1000, unit: 'MJ', calorificBasis: 'gross' },
       RESIDENTIAL,
     );
 
-    expect(result.energyTJ).toBeCloseTo(0.00674025, 14);
-    expect(gas(result.totalContributing, 'CO2').kg).toBeCloseTo(425.309775, 9);
+    expect(result.energyTJ).toBeCloseTo(0.00095, 15);
+    expect(gas(result.totalContributing, 'CO2').kg).toBeCloseTo(68.305, 10);
   });
 
   it('flags the step as approximate and records the term it could not quantify', () => {
@@ -456,7 +456,32 @@ describe('gross to net, by the rule of thumb in Vol 2 Ch 1', () => {
     } catch (error) {
       expect((error as EngineError).code).toBe('missing_calorific_basis_conversion');
       expect((error as EngineError).message).toContain('will not borrow');
+      expect((error as EngineError).message).toContain('solid biomass');
     }
+  });
+
+  it('refuses LPG too, where the two rules point opposite ways', () => {
+    // The Guidelines classify LPG as a liquid fuel, which points at the 5
+    // percent rule; it is a gas at ambient pressure, which points at the 10
+    // percent one. Neither plainly covers it, so it takes neither. Choosing on
+    // the strength of a classification would be picking a number rather than
+    // reading one — and the two rules differ by a factor of two.
+    try {
+      convertQuantity(LPG, { quantity: 7095, unit: 'MJ', calorificBasis: 'gross' });
+      expect.unreachable('expected a missing-conversion error');
+    } catch (error) {
+      expect((error as EngineError).code).toBe('missing_calorific_basis_conversion');
+      expect((error as EngineError).message).toContain('gas at ambient pressure');
+    }
+  });
+
+  it('still accepts a net LPG figure, and by mass in either case', () => {
+    // The refusal is about the gross-to-net step alone. Nothing else about LPG
+    // becomes uncalculable.
+    expect(() =>
+      convertQuantity(LPG, { quantity: 7095, unit: 'MJ', calorificBasis: 'net' }),
+    ).not.toThrow();
+    expect(() => convertQuantity(LPG, { quantity: 150, unit: 'kg' })).not.toThrow();
   });
 
   it('still accepts a net figure for solid biomass, which needs no conversion', () => {
@@ -610,6 +635,11 @@ describe('every conversion step carries its factor, its class and its working', 
       name: 'gross kilowatt-hours',
       fuel: 'natural_gas',
       input: { quantity: 1000, unit: 'kWh', calorificBasis: 'gross' as const },
+    },
+    {
+      name: 'gross megajoules of an oil product',
+      fuel: 'other_kerosene',
+      input: { quantity: 1000, unit: 'MJ', calorificBasis: 'gross' as const },
     },
   ];
 

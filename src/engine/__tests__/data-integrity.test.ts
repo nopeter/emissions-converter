@@ -455,14 +455,15 @@ describe('the gross-to-net rules of thumb are complete and honest', () => {
     expect(new Set(families).size).toBe(families.length);
   });
 
-  it('classes every one as an IPCC approximation, and none as verified', () => {
-    // These are rules of thumb quoted from Vol 2 Ch 1, cited at chapter level.
-    // Marking one `exact` would claim the Guidelines quantify it; marking one
-    // verified would claim the exact section has been confirmed.
+  it('classes every one as an IPCC approximation, never as exact', () => {
+    // Verified means the citation has been checked against the primary text,
+    // which it has: Vol 2 Ch 1 Section 1.4.1.2. It does not mean the rule is
+    // precise. The two claims are independent, and marking one `exact` would
+    // assert the second — that the Guidelines quantify the rule, which they
+    // do not.
     for (const conversion of parameters.calorific_basis_conversions) {
       expect(conversion.provenance, conversion.id).toBe('ipcc_approximate');
-      expect(conversion.verified, conversion.id).toBe(false);
-      expect(conversion.source).toBeTruthy();
+      expect(conversion.source, conversion.id).toContain('Section 1.4.1.2');
       expect(conversion.note, `${conversion.id}: must name the Box 1.1 alternative`).toContain(
         'Box 1.1',
       );
@@ -491,7 +492,7 @@ describe('the gross-to-net rules of thumb are complete and honest', () => {
     }
   });
 
-  it('gives no biomass fuel a family, because none is published for solid biomass', () => {
+  it('gives no biomass fuel a family, because neither rule covers solid biomass', () => {
     // Moisture content drives the gross-to-net difference for wood and
     // charcoal, and it is both larger and more variable than either rule of
     // thumb. Assigning one would be inventing a factor (CLAUDE.md rule 7).
@@ -500,12 +501,29 @@ describe('the gross-to-net rules of thumb are complete and honest', () => {
     }
   });
 
-  it('explains any family assignment that is not obvious from the fuel name', () => {
-    // LPG is the live case: a gas at ambient pressure, but classified by Table
-    // 1.1 as a liquid fuel, so it takes the coal-and-oil rule.
+  it('gives LPG no family either, because the two rules point opposite ways', () => {
+    // The Guidelines classify liquefied petroleum gases as a liquid fuel, which
+    // would point at the 5 percent coal-and-oil rule; LPG is a gas at ambient
+    // pressure, which points at the 10 percent rule for gases. Neither plainly
+    // covers it, so it takes neither and a gross figure is refused. Picking the
+    // one whose classification happens to match would be choosing a number
+    // rather than reading one.
     const lpg = parameters.fuels.find((fuel) => fuel.id === 'liquefied_petroleum_gases');
-    expect(lpg?.calorific_basis_family).toBe('coal_and_oil');
-    expect(lpg?.calorific_basis_family_note).toBeTruthy();
+    expect(lpg?.calorific_basis_family).toBeUndefined();
+  });
+
+  it('explains every fuel that is deliberately in no family', () => {
+    // The note is what the engine puts in front of the user when it refuses a
+    // gross figure, so a fuel without one refuses without saying why.
+    for (const fuel of parameters.fuels) {
+      if (fuel.calorific_basis_family !== undefined) {
+        continue;
+      }
+      expect(
+        fuel.calorific_basis_family_note,
+        `${fuel.id}: in no calorific basis family, but does not say why`,
+      ).toBeTruthy();
+    }
   });
 });
 

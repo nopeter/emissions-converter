@@ -10,6 +10,54 @@ Two version numbers are tracked:
 - `schema_version` — the shape of the file. Bumped when a consumer would have to
   change to read it.
 
+## library 0.4.0 — schema 4.0.0 — 2026-08-06
+
+Three corrections to 0.3.0, all reviewer decisions. No emission factor,
+calorific value or GWP changed.
+
+### LPG takes neither gross-to-net rule
+
+`calorific_basis_family` is removed from liquefied petroleum gases. 0.3.0 gave
+it the coal-and-oil rule on the strength of Table 1.1 classifying LPG as a
+liquid fuel. That was reading a classification, not a rule: LPG is a gas at
+ambient pressure, the Guidelines' two rules of thumb point opposite ways, and
+they differ by a factor of two. Neither plainly covers it, so it takes neither
+and a gross energy figure for LPG is now refused — the same treatment as
+charcoal and firewood.
+
+`calorific_basis_family_note` now appears on all three fuels that are
+deliberately in no family, and is what the engine shows the user when it
+refuses. A fuel in no family without a note now fails a data-integrity test,
+so a future fuel cannot refuse silently.
+
+Nothing else about LPG changed: net energy, mass and volume all still
+calculate, and the cylinder presets are untouched.
+
+### The gross-to-net citation is now exact
+
+Both `calorific_basis_conversions` records cite Vol 2 Ch 1, Section 1.4.1.2
+("Conversion of Energy Units"), in the text immediately preceding Box 1.1,
+rather than the chapter. Both are now `verified: true`.
+
+Verified and approximate are independent claims, and both records still make
+the second: the citation has been checked, and the rule is still a rule of
+thumb the Guidelines do not quantify. They stay `ipcc_approximate`, still add
+an uncertainty term the engine cannot evaluate, and still name Box 1.1 as the
+exact algorithm that needs fuel analysis data. The open question about
+confirming the section is closed.
+
+### The `mvp` flag is gone (breaking)
+
+Removed from every fuel record and from the `Fuel` type. The calculator offers
+every fuel/category combination with a complete, unambiguous factor set, so a
+per-fuel flag describing an earlier scope was obsolete and, since 0.3.0
+unblocked volume and energy input, actively misleading — it still read false
+for kerosene, diesel, petrol and natural gas, all of which work. The open
+question about reviewing it is closed with its removal.
+
+No engine or UI code read the flag. `MVP_COMBINATIONS` in the data-integrity
+tests is a separate fuel/category list and is unaffected.
+
 ## library 0.3.0 — schema 3.0.0 — 2026-08-06
 
 Unit selection. The user picks the unit they bought their fuel in; the engine

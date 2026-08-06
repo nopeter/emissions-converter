@@ -159,15 +159,20 @@ export interface Fuel {
   /** Id of the unit to preselect: the one this fuel is actually sold in. */
   default_unit: string;
   /**
-   * Which gross-to-net rule of thumb applies, when one does. Absent for solid
-   * biomass, where the Guidelines publish none and the engine refuses to
-   * convert rather than borrowing another family's.
+   * Which gross-to-net rule of thumb applies, when one plainly does. Absent for
+   * solid biomass, which the Guidelines' two rules do not cover, and for LPG,
+   * which they point at from both directions at once. The engine refuses a
+   * gross energy figure for those rather than borrowing a family's number.
    */
   calorific_basis_family?: string;
-  /** Why this fuel is in that family, where the assignment is not obvious. */
+  /**
+   * Why this fuel is in that family, or why it is in none.
+   *
+   * Required wherever `calorific_basis_family` is absent, because the engine
+   * puts this text in front of the user when it refuses their gross energy
+   * figure. Write it for them, not for us: no repo references, no jargon.
+   */
   calorific_basis_family_note?: string;
-  /** In the current minimum viable product scope. */
-  mvp: boolean;
   /**
    * Id of an unsourced density record. It no longer blocks the fuel outright —
    * the user is asked for a density instead — but it does mean there is no

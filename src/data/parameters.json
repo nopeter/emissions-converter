@@ -1,6 +1,6 @@
 {
-  "schema_version": "3.0.0",
-  "library_version": "0.3.0",
+  "schema_version": "4.0.0",
+  "library_version": "0.4.0",
   "updated": "2026-08-06",
   "methodology": "2006 IPCC Guidelines for National Greenhouse Gas Inventories",
   "readme": "Every record carries a provenance class. 'ipcc' values were read directly from the cited table of the 2006 IPCC Guidelines. 'external' values come from outside the Guidelines and must name their own source. 'assumed' values are our own simplifications. Nothing in this file may be treated as verified unless verified is true.",
@@ -167,7 +167,7 @@
     }
   ],
 
-  "calorific_basis_note": "The net calorific values and emission factors in this library are on a net (lower) heating value basis, which is what the 2006 IPCC Guidelines work in. Energy figures printed on bills and meters are sometimes gross (higher heating value) instead, and the difference is not negligible. Vol 2 Ch 1 of the Guidelines offers a rule of thumb: the net calorific value is about 5 percent below the gross for coal and oil, and about 10 percent below for most natural and manufactured gases. Box 1.1 of the same chapter gives an exact algorithm for the conversion, but it needs fuel analysis data — hydrogen and moisture content — that no household user will have, which is why the rule of thumb is what this calculator can offer. It is an approximation and every figure derived through it is flagged as one. There is no published rule of thumb for solid biomass, so none is applied to charcoal or firewood: their gross-to-net difference is driven by moisture content and is both larger and more variable than 5 percent.",
+  "calorific_basis_note": "The net calorific values and emission factors in this library are on a net (lower) heating value basis, which is what the 2006 IPCC Guidelines work in. Energy figures printed on bills and meters are sometimes gross (higher heating value) instead, and the difference is not negligible. Vol 2 Ch 1 Section 1.4.1.2 offers a rule of thumb: the net calorific value is about 5 percent below the gross for coal and oil, and about 10 percent below for most natural and manufactured gases. Box 1.1, immediately after that text, gives an exact algorithm for the conversion, but it needs fuel analysis data — hydrogen and moisture content — that no household user will have, which is why the rule of thumb is what this calculator can offer. It is an approximation and every figure derived through it is flagged as one. A fuel is converted only where one of the two rules plainly covers it. Charcoal and firewood are covered by neither: their gross-to-net difference is driven by moisture content and is both larger and more variable than 5 percent. Nor is LPG, which the Guidelines classify as a liquid fuel but which is a gas at ambient pressure — the two rules point opposite ways and neither is clearly the right one. For all three, a gross figure is refused rather than converted.",
 
   "calorific_basis_conversions": [
     {
@@ -176,9 +176,9 @@
       "fuel_family": "coal_and_oil",
       "reduction_percent": 5,
       "provenance": "ipcc_approximate",
-      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1",
-      "verified": false,
-      "note": "Approximate. Vol 2 Ch 1 Box 1.1 gives an exact algorithm for converting between gross and net calorific values, but it requires fuel analysis data the user will not have. Cited at chapter level: the exact section has not yet been confirmed against the primary text, which is why this record is not verified."
+      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1, Section 1.4.1.2 (Conversion of Energy Units), in the text immediately preceding Box 1.1",
+      "verified": true,
+      "note": "Approximate: the Guidelines say 'about' 5 percent and do not quantify how far off that can be, so a figure derived through it carries an uncertainty term the engine cannot evaluate. Box 1.1, immediately after the cited text, gives an exact algorithm for converting between gross and net calorific values, but it requires fuel analysis data the user will not have."
     },
     {
       "id": "gcv_to_ncv_natural_and_manufactured_gas",
@@ -186,9 +186,9 @@
       "fuel_family": "natural_and_manufactured_gas",
       "reduction_percent": 10,
       "provenance": "ipcc_approximate",
-      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1",
-      "verified": false,
-      "note": "Approximate, and stated by the Guidelines as covering most such gases rather than all of them. Vol 2 Ch 1 Box 1.1 gives an exact algorithm requiring fuel analysis data the user will not have. Cited at chapter level: the exact section has not yet been confirmed against the primary text, which is why this record is not verified."
+      "source": "2006 IPCC Guidelines, Vol 2 (Energy), Ch 1, Section 1.4.1.2 (Conversion of Energy Units), in the text immediately preceding Box 1.1",
+      "verified": true,
+      "note": "Approximate, and stated by the Guidelines as covering most such gases rather than all of them, so a figure derived through it carries an uncertainty term the engine cannot evaluate. Box 1.1, immediately after the cited text, gives an exact algorithm requiring fuel analysis data the user will not have."
     }
   ],
 
@@ -298,9 +298,7 @@
       "biomass": false,
       "sold_by": "mass",
       "default_unit": "kg",
-      "calorific_basis_family": "coal_and_oil",
-      "calorific_basis_family_note": "Vol 2 Ch 1 Table 1.1 classifies liquefied petroleum gases under liquid fuels, not gaseous fuels, so the 5 percent rule for coal and oil is the one that applies rather than the 10 percent rule for natural and manufactured gas. LPG is a gas at ambient pressure, so this is worth a reviewer's eye; see open_questions.",
-      "mvp": true,
+      "calorific_basis_family_note": "Table 1.1 classifies liquefied petroleum gases as a liquid fuel, which would point at the 5 percent rule; but LPG is a gas at ambient pressure, which points at the 10 percent one. The two differ by a factor of two, and choosing between them on the strength of a classification would mean picking a number rather than reading one. LPG is sold by weight in any case, where the question does not arise.",
       "presets": [
         {
           "id": "lpg_cylinder_12_5kg",
@@ -340,8 +338,8 @@
       "biomass": true,
       "sold_by": "mass",
       "default_unit": "kg",
-      "mvp": true,
-      "note": "Bag weights vary widely by market, so no bag preset is offered; see open_questions. No gross-to-net calorific approximation is published for solid biomass, so an energy figure for charcoal must be entered on a net basis."
+      "calorific_basis_family_note": "Neither rule covers solid biomass. For charcoal the gross-to-net difference is driven by moisture content, which makes it both larger and more variable than the 5 percent that applies to coal and oil.",
+      "note": "Bag weights vary widely by market, so no bag preset is offered; see open_questions."
     },
     {
       "id": "wood_wood_waste",
@@ -349,8 +347,8 @@
       "biomass": true,
       "sold_by": "mass",
       "default_unit": "kg",
-      "mvp": true,
-      "note": "Moisture content drives the very wide NCV interval (7.9 to 31.0 TJ/Gg). Expect large uncertainty and say so in the UI. Moisture is also why no gross-to-net calorific approximation is published for it: the difference is larger and more variable than the 5 percent rule for coal and oil."
+      "calorific_basis_family_note": "Neither rule covers solid biomass. For firewood the gross-to-net difference is driven by moisture content, which makes it both larger and more variable than the 5 percent that applies to coal and oil.",
+      "note": "Moisture content drives the very wide NCV interval (7.9 to 31.0 TJ/Gg). Expect large uncertainty and say so in the UI."
     },
     {
       "id": "other_kerosene",
@@ -359,7 +357,6 @@
       "sold_by": "volume",
       "default_unit": "litre",
       "calorific_basis_family": "coal_and_oil",
-      "mvp": false,
       "blocked_by": "density_other_kerosene"
     },
     {
@@ -369,7 +366,6 @@
       "sold_by": "volume",
       "default_unit": "litre",
       "calorific_basis_family": "coal_and_oil",
-      "mvp": false,
       "blocked_by": "density_motor_gasoline"
     },
     {
@@ -379,7 +375,6 @@
       "sold_by": "volume",
       "default_unit": "litre",
       "calorific_basis_family": "coal_and_oil",
-      "mvp": false,
       "blocked_by": "density_gas_diesel_oil"
     },
     {
@@ -389,7 +384,6 @@
       "sold_by": "volume_or_energy",
       "default_unit": "kWh",
       "calorific_basis_family": "natural_and_manufactured_gas",
-      "mvp": false,
       "blocked_by": "density_natural_gas",
       "note": "Defaults to the kilowatt-hour because that is what a gas bill states. Entering energy skips the calorific value altogether, which is why natural gas is usable without the density this record is otherwise blocked by."
     }
@@ -1061,9 +1055,6 @@
     "Verify all GWP values against the primary IPCC assessment reports, and replace each set's report-level source with the exact table reference (source_precision is currently report_level on every set).",
     "Confirm with a reviewer that picking the AR6 methane GWP from the fuel's biomass flag is the right rule, now that the engine does so: biomass fuels get the non-fossil value, everything else the fossil one.",
     "Confirm IPCC/IGES copyright position on reproducing default factor tables in a commercial product.",
-    "Decide whether charcoal and firewood bag presets are offered at all, given how much bag weights vary.",
-    "Confirm the exact section of Vol 2 Ch 1 that states the 5 percent and 10 percent gross-to-net rules of thumb, and replace the chapter-level citation on both calorific_basis_conversions records with it. Neither is verified until that is done.",
-    "Confirm that liquefied petroleum gases take the 5 percent coal-and-oil rule rather than the 10 percent gas rule. Table 1.1 classifies LPG as a liquid fuel, which is the basis used here, but it is a gas at ambient pressure and a reviewer should say so explicitly before the gross energy path is relied on for it.",
-    "Review the mvp flag on kerosene, diesel, petrol and natural gas. It still reads false, which was true when volume and energy input were unavailable and is now misleading; changing it is a product decision, not a data correction."
+    "Decide whether charcoal and firewood bag presets are offered at all, given how much bag weights vary."
   ]
 }
